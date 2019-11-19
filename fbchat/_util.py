@@ -4,11 +4,10 @@ import time
 import random
 import contextlib
 import mimetypes
-import urllib.parse
-import requests
+import aiohttp
+from yarl import URL
 from os import path
 
-from ._core import log
 from ._exception import (
     FBchatException,
     FBchatFacebookError,
@@ -38,14 +37,6 @@ def strip_json_cruft(text):
         return text[text.index("{") :]
     except ValueError:
         raise FBchatException("No JSON object found: {!r}".format(text))
-
-
-def get_decoded_r(r):
-    return get_decoded(r._content)
-
-
-def get_decoded(content):
-    return content.decode("utf-8")
 
 
 def parse_json(content):
@@ -127,9 +118,9 @@ def handle_graphql_errors(j):
         )
 
 
-def check_request(r):
-    check_http_code(r.status_code)
-    content = get_decoded_r(r)
+async def check_request(r):
+    check_http_code(r.status)
+    content = await r.text()
     check_content(content)
     return content
 
@@ -146,19 +137,19 @@ def check_http_code(code):
         raise FBchatFacebookError(msg, request_status_code=code)
 
 
-def check_content(content, as_json=True):
+def check_content(content):
     if content is None or len(content) == 0:
         raise FBchatFacebookError("Error when sending request: Got empty response")
 
 
-def to_json(content):
+def to_json(content, log):
     content = strip_json_cruft(content)
     j = parse_json(content)
     log.debug(j)
     return j
 
 
-def get_jsmods_require(j, index):
+def get_jsmods_require(j, index, log):
     if j.get("jsmods") and j["jsmods"].get("require"):
         try:
             return j["jsmods"]["require"][0][index][0]
@@ -174,7 +165,7 @@ def require_list(list_):
     if isinstance(list_, list):
         return set(list_)
     else:
-        return set([list_])
+        return {list_}
 
 
 def mimetype_to_key(mimetype):
@@ -188,20 +179,20 @@ def mimetype_to_key(mimetype):
     return "file_id"
 
 
-def get_files_from_urls(file_urls):
+async def get_files_from_urls(file_urls):
     files = []
-    for file_url in file_urls:
-        r = requests.get(file_url)
-        # We could possibly use r.headers.get('Content-Disposition'), see
-        # https://stackoverflow.com/a/37060758
-        file_name = path.basename(file_url).split("?")[0].split("#")[0]
-        files.append(
-            (
-                file_name,
-                r.content,
-                r.headers.get("Content-Type") or mimetypes.guess_type(file_name)[0],
+    async with aiohttp.ClientSession() as session:
+        for file_url in file_urls:
+            r = await session.get(file_url)
+            # We could possibly use r.headers.get('Content-Disposition'), see
+            # https://stackoverflow.com/a/37060758
+            files.append(
+                (
+                    path.basename(file_url).split("?")[0].split("#")[0],
+                    await r.read(),
+                    r.headers.get("Content-Type") or mimetypes.guess_type(file_url)[0],
+                )
             )
-        )
     return files
 
 
@@ -221,13 +212,8 @@ def get_files_from_paths(filenames):
         fp.close()
 
 
-def get_url_parameters(url, *args):
-    params = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
-    return [params[arg][0] for arg in args if params.get(arg)]
-
-
 def get_url_parameter(url, param):
-    return get_url_parameters(url, param)[0]
+    return URL(url).query.get(param)
 
 
 def prefix_url(url):

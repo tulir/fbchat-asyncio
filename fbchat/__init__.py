@@ -1,6 +1,7 @@
-"""Facebook Chat (Messenger) for Python
+"""Facebook Messenger library for Python/Asyncio
 
-:copyright: (c) 2015 - 2019 by Taehoon Kim
+:copyright: (c) 2015 - 2019 Taehoon Kim
+:copyright: (c) 2019 Tulir Asokan
 :license: BSD 3-Clause, see LICENSE for more details.
 """
 
@@ -33,14 +34,14 @@ from ._plan import GuestStatus, Plan
 
 from ._client import Client
 
-__title__ = "fbchat"
-__version__ = "1.8.1"
-__description__ = "Facebook Chat (Messenger) for Python"
+__title__ = "fbchat-asyncio"
+__version__ = "0.3.0"
+__description__ = "Facebook Messenger library for Python/Asyncio."
 
 __copyright__ = "Copyright 2015 - 2019 by Taehoon Kim"
 __license__ = "BSD 3-Clause"
 
-__author__ = "Taehoon Kim; Moreels Pieter-Jan; Mads Marquart"
-__email__ = "carpedm20@gmail.com"
+__author__ = "Tulir Asokan"
+__email__ = "tulir@maunium.net"
 
 __all__ = ("Client",)

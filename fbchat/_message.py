@@ -1,7 +1,7 @@
 import attr
 import json
 from string import Formatter
-from ._core import log, Enum
+from ._core import Enum
 from . import _util, _attachment, _location, _file, _quick_reply, _sticker
 
 
@@ -307,7 +307,7 @@ class Message:
         return rtn
 
     @classmethod
-    def _from_pull(cls, data, mid=None, tags=None, author=None, created_at=None):
+    def _from_pull(cls, data, mid=None, tags=None, author=None, created_at=None, log=None):
         rtn = cls(text=data.get("body"))
         rtn.uid = mid
         rtn.author = author

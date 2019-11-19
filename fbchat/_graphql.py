@@ -1,6 +1,5 @@
 import json
 import re
-from ._core import log
 from . import _util, _exception
 
 # Shameless copy from https://stackoverflow.com/a/8730674
@@ -56,7 +55,7 @@ def response_to_json(content):
         else:
             rtn[int(key[1:])] = value["data"]
 
-    log.debug(rtn)
+    # log.debug(rtn)
 
     return rtn
 
