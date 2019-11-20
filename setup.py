@@ -24,6 +24,7 @@ setuptools.setup(
         "beautifulsoup4",
         "aiohttp",
         "yarl",
+        "hbmqtt @ https://github.com/tulir/hbmqtt/tarball/master"
     ],
 
     python_requires="~=3.6",

@@ -1,9 +1,14 @@
 import datetime
 import time
 import json
+import uuid
+import random
 import asyncio
 import aiohttp
 from collections import OrderedDict
+
+from hbmqtt.client import MQTTClient
+from hbmqtt.mqtt.constants import QOS_0
 
 from ._core import log as default_log
 from . import _util, _graphql, _state
@@ -42,6 +47,8 @@ class Client:
     interact with Facebook. You can extend this class, and overwrite the ``on`` methods,
     to provide custom event handling (mainly useful while listening).
     """
+
+    _state: _state.State
 
     @property
     def uid(self):
@@ -2734,6 +2741,143 @@ class Client:
 
         return True
 
+    async def _listen_mqtt(self) -> None:
+        await self.on_listening()
+
+        j, = await self.graphql_requests(_graphql.from_doc_id("1349387578499440", {
+            "limit": 10,
+            "tags": [ThreadLocation.INBOX.value],
+            "before": None,
+            "includeDeliveryReceipts": False,
+            "includeSeqID": True,
+        }))
+        ssid = j["viewer"]["message_threads"]["sync_sequence_id"]
+        sid = random.randint(1, 9007199254740991)  # 7787847402651647
+        # self._log.warning("DEBUG ssid=%s sid=%d", ssid, sid)
+        aid = 219994525426954
+        # _dat = {"u": "100037086870986", "s": 7135949437796351, "cp": 3, "ecp": 10,"chat_on": True,
+        #         "fg": True, "d": "599f825b-69ce-45d1-ab4a-d35e19c7618f", "ct": "websocket",
+        #         "mqtt_sid": "", "aid": 219994525426954, "st": [], "pm": [], "dc": "",
+        #         "no_auto_fg": True, "gas": None}
+
+        dat = {
+            "u": self._uid,
+            "s": sid,
+            "cp": 3,
+            "ecp": 10,
+            "chat_on": True,
+            "fg": True,
+            "d": str(uuid.uuid4()),
+            "ct": "websocket",
+            "mqtt_sid": "",
+            "aid": aid,
+            "st": [],
+            "pm": [],
+            "dc": "",
+            "no_auto_fg": True,
+            "gas": None
+        }
+        # print("==================================== USERNAME ====================================")
+        # print(json.dumps(dat, indent="  "))
+
+        cookies = []
+        # print("==================================== COOKIES ====================================")
+        for item in self.get_session().values():
+            # print(f"{item.key}={item.coded_value}")
+            cookies.append(f"{item.key}={item.coded_value}")
+        cookies = "; ".join(cookies)
+        client = MQTTClient(client_id="mqttwsclient", config={})
+        headers = {
+            **self._state._session._default_headers,
+            "Cookie": cookies,
+            "Accept": "*/*",
+            "Origin": "https://www.facebook.com",
+
+        }
+        # print("==================================== HEADERS ====================================")
+        # print(json.dumps(headers, indent="  "))
+        #
+        # print("==================================== CONNECTING ====================================")
+        client.session = client._initsession(
+            f"wss://edge-chat.facebook.com/chat?region=atn&sid={sid}")
+        client.extra_headers = headers
+        client.session.username = json.dumps(dat)
+        try:
+            await client._do_connect()
+        except Exception:
+            self._log.exception("Connection failed")
+            return
+        await client.subscribe([
+            ("/legacy_web", QOS_0), ("/webrtc", QOS_0), ("/br_sr", QOS_0), ("/sr_res", QOS_0),
+            ("/t_ms", QOS_0), ("/thread_typing", QOS_0), ("/orca_typing_notifications", QOS_0),
+            ("/notify_disconnect", QOS_0), ("/orca_presence", QOS_0)
+        ])
+        await client.unsubscribe(["/orca_message_notifications"])
+
+        create_sync_queue = {
+            "sync_api_version": 10,
+            "max_deltas_able_to_process": 1000,
+            "delta_batch_size": 500,
+            "encoding": "JSON",
+            "entity_fbid": self._uid,
+            "initial_titan_sequence_id": str(ssid),
+            "device_params": None
+        }
+
+        await client.publish("/messenger_sync_create_queue",
+                             json.dumps(create_sync_queue).encode("utf-8"))
+
+        import pprint
+        i = 0
+        while True:
+            message = await client.deliver_message()
+            event_type = message.publish_packet.variable_header.topic_name
+            data = message.publish_packet.payload.data.decode("utf-8")
+            try:
+                event = json.loads(data)
+            except json.JSONDecodeError as e:
+                self._log.warning(f"JSON decoder error: {e}\n{data}")
+                continue
+
+            print(event_type)
+            pprint.pprint(event)
+            asyncio.ensure_future(self._try_parse_mqtt(event_type, event))
+
+            i += 1
+
+    async def _try_parse_mqtt(self, event_type: str, event: dict) -> None:
+        try:
+            await self._parse_mqtt(event_type, event)
+        except Exception:
+            self._log.exception("Failed to parse MQTT event")
+
+    async def _parse_mqtt(self, event_type: str, event: dict) -> None:
+        if event_type == "/t_ms":
+            for delta in event.get("deltas", []):
+                await self._parse_delta({"delta": delta})
+        elif event_type == "/thread_typing":
+            author_id = str(event.get("sender_fbid"))
+            thread_id = event.get("thread")
+            typing_status = TypingStatus(event.get("state"))
+            await self.on_typing(
+                author_id=author_id,
+                status=typing_status,
+                thread_id=thread_id,
+                thread_type=ThreadType.GROUP,
+                msg=event,
+            )
+        elif event_type == "/orca_typing_notifications":
+            author_id = str(event.get("sender_fbid"))
+            thread_id = author_id
+            typing_status = TypingStatus(event.get("state"))
+            await self.on_typing(
+                author_id=author_id,
+                status=typing_status,
+                thread_id=thread_id,
+                thread_type=ThreadType.USER,
+                msg=event,
+            )
+
     async def _listen(self) -> None:
         await self.on_listening()
         prev_time = int(time.time())
@@ -2755,7 +2899,7 @@ class Client:
 
     async def _try_listen(self) -> None:
         try:
-            await self._listen()
+            await self._listen_mqtt()
         except Exception:
             self._log.exception("Fatal error listening")
 
