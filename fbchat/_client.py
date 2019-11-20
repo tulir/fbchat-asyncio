@@ -2474,7 +2474,11 @@ class Client:
         # Client payload (that weird numbers)
         elif delta_class == "ClientPayload":
             payload = json.loads("".join(chr(z) for z in delta["payload"]))
-            at = _util.millis_to_datetime(m.get("ofd_ts"))
+            print("CLIENT PAYLOAD:", payload)
+            if "ofd_ts" in m:
+                at = _util.millis_to_datetime(m.get("ofd_ts"))
+            else:
+                at = None
             for d in payload.get("deltas", []):
 
                 # Message reaction
@@ -2828,7 +2832,6 @@ class Client:
         await client.publish("/messenger_sync_create_queue",
                              json.dumps(create_sync_queue).encode("utf-8"))
 
-        import pprint
         i = 0
         while True:
             message = await client.deliver_message()
@@ -2840,8 +2843,7 @@ class Client:
                 self._log.warning(f"JSON decoder error: {e}\n{data}")
                 continue
 
-            print(event_type)
-            pprint.pprint(event)
+            print(event_type, event)
             asyncio.ensure_future(self._try_parse_mqtt(event_type, event))
 
             i += 1
