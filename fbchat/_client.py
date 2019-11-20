@@ -77,6 +77,7 @@ class Client:
         self._base_log = log or default_log
         self.loop = loop or asyncio.get_event_loop()
         self._listening = None
+        self._listening_mqtt = None
         self._uid = None
         self._state = None
         self._log = self._base_log.getChild("client")
@@ -2897,9 +2898,15 @@ class Client:
                 requests_on_second = 1
             prev_time = cur_time
 
-    async def _try_listen(self) -> None:
+    async def _try_listen_mqtt(self) -> None:
         try:
             await self._listen_mqtt()
+        except Exception:
+            self._log.exception("Fatal error listening on MQTT")
+
+    async def _try_listen(self) -> None:
+        try:
+            await self._listen()
         except Exception:
             self._log.exception("Fatal error listening")
 
@@ -2913,10 +2920,13 @@ class Client:
             self.set_active_status(markAlive)
 
         self._listening = asyncio.ensure_future(self._try_listen(), loop=self.loop)
+        self._listening_mqtt = asyncio.ensure_future(self._try_listen_mqtt(), loop=self.loop)
 
     def stop_listening(self) -> None:
         if self._listening:
             self._listening.cancel()
+        if self._listening_mqtt:
+            self._listening_mqtt.cancel()
         self._sticky, self._pool = (None, None)
 
     def set_active_status(self, markAlive):
