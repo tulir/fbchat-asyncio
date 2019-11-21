@@ -2747,137 +2747,136 @@ class Client:
         return True
 
     async def _listen_mqtt(self) -> None:
-        await self.on_listening()
-
+        # Get the sync sequence ID used for the /messenger_sync_create_queue call later.
+        # This is the same request as fetch_thread_list, but with includeSeqID=true
         j, = await self.graphql_requests(_graphql.from_doc_id("1349387578499440", {
-            "limit": 10,
+            "limit": 1,
             "tags": [ThreadLocation.INBOX.value],
             "before": None,
             "includeDeliveryReceipts": False,
             "includeSeqID": True,
         }))
-        ssid = j["viewer"]["message_threads"]["sync_sequence_id"]
-        sid = random.randint(1, 9007199254740991)  # 7787847402651647
-        # self._log.warning("DEBUG ssid=%s sid=%d", ssid, sid)
-        aid = 219994525426954
-        # _dat = {"u": "100037086870986", "s": 7135949437796351, "cp": 3, "ecp": 10,"chat_on": True,
-        #         "fg": True, "d": "599f825b-69ce-45d1-ab4a-d35e19c7618f", "ct": "websocket",
-        #         "mqtt_sid": "", "aid": 219994525426954, "st": [], "pm": [], "dc": "",
-        #         "no_auto_fg": True, "gas": None}
+        sync_sequence_id = j["viewer"]["message_threads"]["sync_sequence_id"]
 
-        dat = {
+        # Random session ID
+        sid = random.randint(1, 9007199254740991)
+
+        # The MQTT username. There's no password.
+        username = {
             "u": self._uid,
             "s": sid,
             "cp": 3,
             "ecp": 10,
             "chat_on": True,
             "fg": True,
+            # Not sure if this should be some specific kind of UUID, but it's a random one now.
             "d": str(uuid.uuid4()),
             "ct": "websocket",
             "mqtt_sid": "",
-            "aid": aid,
+            # Application ID, taken from facebook.com
+            "aid": 219994525426954,
             "st": [],
             "pm": [],
             "dc": "",
             "no_auto_fg": True,
             "gas": None
         }
-        # print("==================================== USERNAME ====================================")
-        # print(json.dumps(dat, indent="  "))
-
-        cookies = []
-        # print("==================================== COOKIES ====================================")
-        for item in self.get_session().values():
-            # print(f"{item.key}={item.coded_value}")
-            cookies.append(f"{item.key}={item.coded_value}")
-        cookies = "; ".join(cookies)
-        client = MQTTClient(client_id="mqttwsclient", config={})
+        # Headers for the websocket connection. Not including Origin will cause 502's.
+        # User agent and Referer also probably required. Cookie is how it auths.
+        # Accept is there just for fun.
         headers = {
             **self._state._session._default_headers,
-            "Cookie": cookies,
+            "Cookie": ";".join(f"{item.key}={item.coded_value}"
+                               for item in self.get_session().values()),
             "Accept": "*/*",
-            "Origin": "https://www.facebook.com",
-
         }
-        # print("==================================== HEADERS ====================================")
-        # print(json.dumps(headers, indent="  "))
-        #
-        # print("==================================== CONNECTING ====================================")
-        client.session = client._initsession(
-            f"wss://edge-chat.facebook.com/chat?region=atn&sid={sid}")
-        client.extra_headers = headers
-        client.session.username = json.dumps(dat)
-        try:
-            await client._do_connect()
-        except Exception:
-            self._log.exception("Connection failed")
-            return
-        await client.subscribe([
-            ("/legacy_web", QOS_0), ("/webrtc", QOS_0), ("/br_sr", QOS_0), ("/sr_res", QOS_0),
-            ("/t_ms", QOS_0), ("/thread_typing", QOS_0), ("/orca_typing_notifications", QOS_0),
-            ("/notify_disconnect", QOS_0), ("/orca_presence", QOS_0)
-        ])
-        await client.unsubscribe(["/orca_message_notifications"])
+        # MQTT 3.1.0 over a websocket. Client ID "mqttwsclient" taken from facebook.com
+        # Fork of hbmqtt with the MQTT version number (4 -> 3) and protocol name (MQTT -> MQIsdp) changed.
+        client = MQTTClient(client_id="mqttwsclient", config={
+            "auto_reconnect": False,
+            # Upstream hbmqtt has no way to set the username (other than the URL, but that doesn't
+            # work because the username is JSON and contains :'s and hbmqtt doesn't url-decode it),
+            # so this option only works in my fork.
+            "username": json.dumps(username)
+        })
 
-        create_sync_queue = {
+        cont = True
+        while cont:
+            cont = await self._do_listen_mqtt(client, sid, sync_sequence_id, username, headers)
+
+    async def _do_listen_mqtt(self, client, sid, sync_sequence_id, username, headers) -> bool:
+        try:
+            await client.connect(uri=f"wss://edge-chat.facebook.com/chat?region=atn&sid={sid}",
+                                 extra_headers=headers)
+        except Exception as e:
+            return await self.on_mqtt_fatal_error(e)
+        await client.subscribe([
+            ("/legacy_web", QOS_0),
+            ("/webrtc", QOS_0),
+            ("/br_sr", QOS_0),
+            ("/sr_res", QOS_0),
+            ("/t_ms", QOS_0), # Messages
+            ("/thread_typing", QOS_0), # Group typing notifications
+            ("/orca_typing_notifications", QOS_0), # Private chat typing notifications
+            ("/notify_disconnect", QOS_0),
+            ("/orca_presence", QOS_0),
+        ])
+        # I read somewhere that not doing this might add message send limits
+        await client.unsubscribe(["/orca_message_notifications"])
+        # This is required to actually receive messages. The parameters probably do something.
+        await client.publish("/messenger_sync_create_queue", json.dumps({
             "sync_api_version": 10,
             "max_deltas_able_to_process": 1000,
             "delta_batch_size": 500,
             "encoding": "JSON",
             "entity_fbid": self._uid,
-            "initial_titan_sequence_id": str(ssid),
+            "initial_titan_sequence_id": str(sync_sequence_id),
             "device_params": None
-        }
+        }).encode("utf-8"))
 
-        await client.publish("/messenger_sync_create_queue",
-                             json.dumps(create_sync_queue).encode("utf-8"))
-
-        i = 0
-        while True:
-            message = await client.deliver_message()
-            event_type = message.publish_packet.variable_header.topic_name
-            data = message.publish_packet.payload.data.decode("utf-8")
-            try:
-                event = json.loads(data)
-            except json.JSONDecodeError as e:
-                self._log.warning(f"JSON decoder error: {e}\n{data}")
-                continue
-
-            print(event_type, event)
-            asyncio.ensure_future(self._try_parse_mqtt(event_type, event))
-
-            i += 1
-
-    async def _try_parse_mqtt(self, event_type: str, event: dict) -> None:
+        await self.on_listening_mqtt()
         try:
-            await self._parse_mqtt(event_type, event)
-        except Exception:
-            self._log.exception("Failed to parse MQTT event")
+            while True:
+                message = await client.deliver_message()
+                event_type = message.publish_packet.variable_header.topic_name
+                data = message.publish_packet.payload.data
+                try:
+                    event_data = json.loads(data.decode("utf-8"))
+                except json.JSONDecodeError as e:
+                    # I think all the messages are JSON, but this is here just in case
+                    await self.on_mqtt_parse_error(event_type, data, e)
+                    continue
+
+                asyncio.ensure_future(self._try_parse_mqtt(event_type, event_data))
+        except asyncio.CancelledError:
+            self._log.info("MQTT listener cancelled")
+            return False
+        except Exception as e:
+            try:
+                await client.disconnect()
+            except Exception:
+                self._log.warning("Exception when disconnecting in error handler", exc_info=True)
+            return await self.on_mqtt_fatal_error(e)
+
+    async def _try_parse_mqtt(self, event_type: str, event_data: dict) -> None:
+        try:
+            await self._parse_mqtt(event_type, event_data)
+        except Exception as e:
+            await self.on_mqtt_parse_error(event_type, event_data, e)
 
     async def _parse_mqtt(self, event_type: str, event: dict) -> None:
         if event_type == "/t_ms":
             for delta in event.get("deltas", []):
                 await self._parse_delta({"delta": delta})
-        elif event_type == "/thread_typing":
+        elif event_type in ("/thread_typing", "/orca_typing_notifications"):
             author_id = str(event.get("sender_fbid"))
-            thread_id = event.get("thread")
+            thread_id = event.get("thread", author_id)
             typing_status = TypingStatus(event.get("state"))
             await self.on_typing(
                 author_id=author_id,
                 status=typing_status,
                 thread_id=thread_id,
-                thread_type=ThreadType.GROUP,
-                msg=event,
-            )
-        elif event_type == "/orca_typing_notifications":
-            author_id = str(event.get("sender_fbid"))
-            thread_id = author_id
-            typing_status = TypingStatus(event.get("state"))
-            await self.on_typing(
-                author_id=author_id,
-                status=typing_status,
-                thread_id=thread_id,
-                thread_type=ThreadType.USER,
+                thread_type=ThreadType.USER if thread_id == author_id else ThreadType.GROUP,
                 msg=event,
             )
 
@@ -2912,17 +2911,21 @@ class Client:
         except Exception:
             self._log.exception("Fatal error listening")
 
-    def listen(self, markAlive=None):
+    def listen(self, long_polling: bool = True, mqtt: bool = True, markAlive=None):
         """Initialize and runs the listening loop continually.
 
         Args:
+            long_polling: Whether the long polling listener should be started
+            mqtt: Whether the MQTT listener should be started
             markAlive (bool): Whether this should ping the Facebook server each time the loop runs
         """
         if markAlive is not None:
             self.set_active_status(markAlive)
 
-        self._listening = asyncio.ensure_future(self._try_listen(), loop=self.loop)
-        self._listening_mqtt = asyncio.ensure_future(self._try_listen_mqtt(), loop=self.loop)
+        if long_polling:
+            self._listening = asyncio.ensure_future(self._try_listen(), loop=self.loop)
+        if mqtt:
+            self._listening_mqtt = asyncio.ensure_future(self._try_listen_mqtt(), loop=self.loop)
 
     def stop_listening(self) -> None:
         if self._listening:
@@ -2969,7 +2972,7 @@ class Client:
 
     async def on_listening(self):
         """Called when the client is listening."""
-        self._log.info("Listening...")
+        self._log.info("Listening with long polling...")
 
     async def on_listen_error(self, exception=None):
         """Called when an error was encountered while listening.
@@ -2981,6 +2984,37 @@ class Client:
             Whether the loop should keep running
         """
         self._log.exception("Got exception while listening")
+        return True
+
+    async def on_listening_mqtt(self):
+        """Called when the client is listening with MQTT."""
+        self._log.info("Listening with MQTT...")
+
+    async def on_mqtt_parse_error(self, event_type=None, event_data=None, exception=None):
+        """Called when an error was encountered while parsing a MQTT message.
+
+        Args:
+            event_type: The event type
+            event_data: The event data, either as a bytearray if JSON decoding failed or as a dict
+                if JSON decoding was successful.
+            exception: The exception that was encountered
+        """
+        if isinstance(event_data, bytearray):
+            self._log.warning(f"JSON decoder error: {exception}")
+        else:
+            self._log.exception("Failed to parse MQTT message")
+
+    async def on_mqtt_fatal_error(self, exception=None):
+        """Called when an error was encountered while listening.
+
+        Args:
+            exception: The exception that was encountered
+
+        Returns:
+            Whether the client should reconnect
+        """
+        self._log.exception("MQTT connection failed, reconnecting in 10s")
+        await asyncio.sleep(10)
         return True
 
     async def on_message(

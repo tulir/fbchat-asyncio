@@ -28,7 +28,8 @@ def find_input_fields(html):
 def session_factory(loop=None, user_agent=None):
     return aiohttp.ClientSession(loop=loop or asyncio.get_event_loop(), headers={
         "User-Agent": user_agent or random.choice(_util.USER_AGENTS),
-        "Referer": "https://www.facebook.com"
+        "Referer": "https://www.facebook.com",
+        "Origin": "https://www.facebook.com",
     })
 
 
