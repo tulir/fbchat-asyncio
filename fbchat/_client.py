@@ -2878,6 +2878,19 @@ class Client:
                 thread_type=ThreadType.USER if thread_id == author_id else ThreadType.GROUP,
                 msg=event,
             )
+        elif event_type == "/orca_presence":
+            statuses = dict()
+            for data in event.get("list", []):
+                user_id = str(data["u"])
+
+                old_in_game = None
+                if user_id in self._buddylist:
+                    old_in_game = self._buddylist[user_id].in_game
+
+                statuses[user_id] = ActiveStatus._from_orca_presence(data, old_in_game)
+                self._buddylist[user_id] = statuses[user_id]
+
+            await self.on_buddylist_overlay(statuses=statuses, msg=event)
 
     async def _listen(self) -> None:
         await self.on_listening()

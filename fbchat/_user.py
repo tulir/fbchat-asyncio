@@ -178,3 +178,11 @@ class ActiveStatus:
             last_active=_util.millis_to_datetime(data.get("la")),
             in_game=None,
         )
+
+    @classmethod
+    def _from_orca_presence(cls, data, in_game=None):
+        return cls(
+            active=(data["p"] in [2, 3]) if "p" in data else None,
+            last_active=_util.millis_to_datetime(data.get("l")),
+            in_game=in_game,
+        )
