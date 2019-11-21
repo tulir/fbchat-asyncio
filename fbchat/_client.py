@@ -2792,7 +2792,7 @@ class Client:
         # MQTT 3.1.0 over a websocket. Client ID "mqttwsclient" taken from facebook.com
         # Fork of hbmqtt with the MQTT version number (4 -> 3) and protocol name (MQTT -> MQIsdp) changed.
         client = MQTTClient(client_id="mqttwsclient", config={
-            "auto_reconnect": False,
+            "auto_reconnect": True,
             # Upstream hbmqtt has no way to set the username (other than the URL, but that doesn't
             # work because the username is JSON and contains :'s and hbmqtt doesn't url-decode it),
             # so this option only works in my fork.
@@ -2848,7 +2848,9 @@ class Client:
 
                 asyncio.ensure_future(self._try_parse_mqtt(event_type, event_data))
         except asyncio.CancelledError:
-            self._log.info("MQTT listener cancelled")
+            self._log.info("MQTT listener cancelled, disconnecting")
+            await client.disconnect()
+            self._log.info("MQTT disconnected")
             return False
         except Exception as e:
             try:
