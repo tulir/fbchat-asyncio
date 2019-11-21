@@ -11,6 +11,7 @@ class ThreadType(Enum):
     USER = 1
     GROUP = 2
     PAGE = 3
+    MARKETPLACE = 4
 
     def _to_class(self):
         """Convert this enum value to the corresponding class."""
