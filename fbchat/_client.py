@@ -2474,7 +2474,6 @@ class Client:
         # Client payload (that weird numbers)
         elif delta_class == "ClientPayload":
             payload = json.loads("".join(chr(z) for z in delta["payload"]))
-            print("CLIENT PAYLOAD:", payload)
             if "ofd_ts" in m:
                 at = _util.millis_to_datetime(m.get("ofd_ts"))
             else:
