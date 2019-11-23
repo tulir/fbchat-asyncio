@@ -2755,7 +2755,10 @@ class Client:
             "includeDeliveryReceipts": False,
             "includeSeqID": True,
         }))
-        self._last_seq_id = j["viewer"]["message_threads"]["sync_sequence_id"]
+        try:
+            self._last_seq_id = int(j["viewer"]["message_threads"]["sync_sequence_id"])
+        except (KeyError, ValueError):
+            self._last_seq_id = 0
 
         # Random session ID
         sid = random.randint(1, 9007199254740991)
@@ -2875,7 +2878,8 @@ class Client:
     async def _parse_mqtt(self, event_type: str, event: dict) -> None:
         if event_type == "/t_ms":
             for delta in event.get("deltas", []):
-                self._last_seq_id = max(self._last_seq_id, delta.get("irisSeqId", 0))
+                self._last_seq_id = max(self._last_seq_id,
+                                        delta.get("lastIssuedSeqId") or delta.get("irisSeqId") or 0)
                 await self._parse_delta({"delta": delta})
         elif event_type in ("/thread_typing", "/orca_typing_notifications"):
             author_id = str(event.get("sender_fbid"))
