@@ -1,10 +1,13 @@
-from fbchat import Client
-from fbchat.models import *
+from fbchat import Client, ThreadType, Message
 
-client = Client("<email>", "<password>")
+client = Client()
 
-print("Own id: {}".format(client.uid))
 
-client.send(Message(text="Hi me!"), thread_id=client.uid, thread_type=ThreadType.USER)
+async def main():
+    await client.start("<email>", "<password>")
+    print(f"Own ID: {client.uid}")
+    await client.send(Message(text="Hi me!"), thread_id=client.uid, thread_type=ThreadType.USER)
+    await client.logout()
 
-client.logout()
+
+client.loop.run_until_complete(main())
