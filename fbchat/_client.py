@@ -1181,7 +1181,7 @@ class Client:
             FBchatException: If request failed
         """
         file_urls = _util.require_list(file_urls)
-        files = await self._upload(_util.get_files_from_urls(file_urls))
+        files = await self._upload(await _util.get_files_from_urls(file_urls))
         return await self._send_files(
             files=files, message=message, thread_id=thread_id, thread_type=thread_type
         )
@@ -1228,7 +1228,7 @@ class Client:
             FBchatException: If request failed
         """
         clip_urls = _util.require_list(clip_urls)
-        files = await self._upload(_util.get_files_from_urls(clip_urls), voice_clip=True)
+        files = await self._upload(await _util.get_files_from_urls(clip_urls), voice_clip=True)
         return await self._send_files(
             files=files, message=message, thread_id=thread_id, thread_type=thread_type
         )
