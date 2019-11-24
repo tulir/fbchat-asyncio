@@ -263,7 +263,7 @@ class State:
         return await self._post("/api/graphqlbatch/", data, as_graphql=True,
                                 req_log=req_log, util_log=util_log)
 
-    async def _upload(self, files, voice_clip=False):
+    async def _upload(self, files, voice_clip=False, req_log=None, util_log=None):
         """Upload files to Facebook.
 
         `files` should be a list of files that requests can upload, see
@@ -276,7 +276,8 @@ class State:
         data = {"voice_clip": voice_clip}
 
         j = await self._payload_post(
-            "https://upload.facebook.com/ajax/mercury/upload.php", data, files=file_dict
+            "https://upload.facebook.com/ajax/mercury/upload.php", data, files=file_dict,
+            req_log=req_log, util_log=util_log
         )
 
         if len(j["metadata"]) != len(files):

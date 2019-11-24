@@ -1143,7 +1143,8 @@ class Client:
         )
 
     async def _upload(self, files, voice_clip=False):
-        return await self._state._upload(files, voice_clip=voice_clip)
+        return await self._state._upload(files, voice_clip=voice_clip, req_log=self._req_log,
+                                         util_log=self._util_log)
 
     async def _send_files(
         self, files, message=None, thread_id=None, thread_type=ThreadType.USER
