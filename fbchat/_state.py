@@ -219,7 +219,7 @@ class State:
         if not query:
             query = {}
         query.update(self.get_params())
-        return {key: value for key, value in query.items() if value is not None}
+        return {key: str(value) for key, value in query.items() if value is not None}
 
     async def _get(self, url, params, error_retries=3, req_log=None, util_log=None):
         params = self._generate_payload(params)
