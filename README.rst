@@ -5,16 +5,14 @@ fbchat-asyncio
     :target: https://github.com/tulir/fbchat-asyncio/tree/master/LICENSE
     :alt: License: BSD 3-Clause
 
-.. image:: https://img.shields.io/badge/python-3.6%203.7-blue.svg
+.. image:: https://img.shields.io/badge/python-3.6%203.7%203.8-blue.svg
     :target: https://pypi.python.org/pypi/fbchat
-    :alt: Supported python versions: 3.6, 3.7
+    :alt: Supported python versions: 3.6, 3.7, 3.8
 
 This project is a fork of `carpedm20/fbchat <https://github.com/carpedm20/fbchat>`__ to add asyncio
-support. Most of the upstream documentation should apply with the necessary ``async``/``await``
-statements added.
-
-Go to `Read the Docs <https://fbchat.readthedocs.io>`__ to see the full documentation,
-or jump right into the code by viewing the `examples <https://github.com/carpedm20/fbchat/tree/master/examples>`__
+support. Most of the `upstream documentation <https://fbchat.readthedocs.io>`__ should apply with
+the necessary ``async``/``await`` statements added. Also, the `examples <https://github.com/tulir/fbchat-asyncio/tree/master/examples>`__
+have been updated to the asyncio version.
 
 Installation:
 
