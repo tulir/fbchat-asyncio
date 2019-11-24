@@ -2876,11 +2876,20 @@ class Client:
         except Exception as e:
             await self.on_mqtt_parse_error(event_type, event_data, e)
 
+    def _get_seq_id(self, event) -> int:
+        try:
+            return int(event["lastIssuedSeqId"])
+        except (KeyError, ValueError):
+            try:
+                return int(event["deltas"][-1]["irisSeqId"])
+            except (KeyError, ValueError, IndexError):
+                return 0
+
     async def _parse_mqtt(self, event_type: str, event: dict) -> None:
         if event_type == "/t_ms":
+            self._last_seq_id = max(self._last_seq_id,
+                                    self._get_seq_id(event))
             for delta in event.get("deltas", []):
-                self._last_seq_id = max(self._last_seq_id,
-                                        delta.get("lastIssuedSeqId") or delta.get("irisSeqId") or 0)
                 await self._parse_delta({"delta": delta})
         elif event_type in ("/thread_typing", "/orca_typing_notifications"):
             author_id = str(event.get("sender_fbid"))
