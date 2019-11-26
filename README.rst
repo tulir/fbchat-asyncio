@@ -6,7 +6,7 @@ fbchat-asyncio
     :alt: License: BSD 3-Clause
 
 .. image:: https://img.shields.io/badge/python-3.6%203.7%203.8-blue.svg
-    :target: https://pypi.python.org/pypi/fbchat
+    :target: https://pypi.python.org/pypi/fbchat-asyncio
     :alt: Supported python versions: 3.6, 3.7, 3.8
 
 This project is a fork of `carpedm20/fbchat <https://github.com/carpedm20/fbchat>`__ to add asyncio
