@@ -111,6 +111,8 @@ class State:
     _client_id = attr.ib(factory=client_id_factory)
     _counter = attr.ib(default=0)
     _logout_h = attr.ib(default=None)
+    _refresh_lock = attr.ib(factory=asyncio.Lock)
+    _refresh_counter = attr.ib(default=0)
 
     def get_params(self):
         self._counter += 1
@@ -173,8 +175,8 @@ class State:
         resp = await self._session.get(url, params={"ref": "mb", "h": logout_h})
         return resp.status == 200
 
-    @classmethod
-    async def from_session(cls, session):
+    @staticmethod
+    async def _from_session(session):
         # TODO: Automatically set user_id when the cookie changes in the session
         user_id = get_user_id(session)
 
@@ -194,7 +196,21 @@ class State:
 
         logout_h_element = soup.find("input", {"name": "h"})
         logout_h = logout_h_element["value"] if logout_h_element else None
+        return user_id, fb_dtsg, revision, logout_h
 
+    async def _refresh(self, log):
+        rid = self._refresh_counter
+        async with self._refresh_lock:
+            if rid != self._refresh_counter:
+                return
+            log.debug("Refreshing session")
+            (self.user_id, self._fb_dtsg,
+             self._revision, self._logout_h) = await self._from_session(self._session)
+            self._refresh_counter += 1
+
+    @classmethod
+    async def from_session(cls, session):
+        user_id, fb_dtsg, revision, logout_h = await cls._from_session(session)
         return cls(
             user_id=user_id,
             fb_dtsg=fb_dtsg,
@@ -226,9 +242,19 @@ class State:
         req_log.debug(f"GET {url}?{URL().with_query(params).query_string}")
         resp = await self._session.get(_util.prefix_url(url), params=params)
         content = await _util.check_request(resp)
-        return _util.to_json(content, log=util_log)
+        resp = _util.to_json(content, log=util_log)
+        try:
+            _util.handle_payload_error(resp)
+            return resp
+        except _exception.FBchatPleaseRefresh:
+            if error_retries <= 0:
+                raise
+            await self._refresh(log=util_log)
+            return await self._get(url, params, error_retries=error_retries - 1,
+                                   req_log=req_log, util_log=util_log)
 
-    async def _post(self, url, data, files=None, as_graphql=False, req_log=None, util_log=None):
+    async def _post(self, url, data, error_retries=3, files=None, as_graphql=False, req_log=None,
+                    util_log=None):
         if files:
             payload = aiohttp.FormData()
             for key, value in self._generate_payload(data).items():
@@ -242,9 +268,18 @@ class State:
         resp = await self._session.post(_util.prefix_url(url), data=payload)
         content = await _util.check_request(resp)
         if as_graphql:
-            return _graphql.response_to_json(content)
+            resp = _graphql.response_to_json(content)
         else:
-            return _util.to_json(content, log=util_log)
+            resp = _util.to_json(content, log=util_log)
+        try:
+            _util.handle_payload_error(resp)
+            return resp
+        except _exception.FBchatPleaseRefresh:
+            if error_retries <= 0:
+                raise
+            await self._refresh(log=util_log)
+            return await self._post(url, data, error_retries=error_retries - 1, files=files,
+                                    as_graphql=as_graphql, req_log=req_log, util_log=util_log)
 
     async def _payload_post(self, url, data, files=None, req_log=None, util_log=None):
         j = await self._post(url, data, files=files, req_log=req_log, util_log=util_log)
