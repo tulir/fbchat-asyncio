@@ -169,7 +169,10 @@ class State:
         if not logout_h:
             url = _util.prefix_url("/bluebar/modern_settings_menu/")
             h_r = await self._session.post(url, data={"pmid": "4"})
-            logout_h = re.search(r'name=\\"h\\" value=\\"(.*?)\\"', await h_r.text()).group(1)
+            match = re.search(r'name=\\"h\\" value=\\"(.*?)\\"', await h_r.text())
+            if not match:
+                return False
+            logout_h = match.group(1)
 
         url = _util.prefix_url("/logout.php")
         resp = await self._session.get(url, params={"ref": "mb", "h": logout_h})
