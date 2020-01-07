@@ -213,7 +213,7 @@ class Client:
         self._uid = self._state.user_id
         await self.on_logged_in(email=email)
 
-    async def logout(self, safe: bool = True) -> None:
+    async def logout(self, safe: bool = True) -> bool:
         """Safely log out the client.
 
         Returns:
