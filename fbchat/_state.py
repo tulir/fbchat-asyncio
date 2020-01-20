@@ -183,7 +183,7 @@ class State:
         # TODO: Automatically set user_id when the cookie changes in the session
         user_id = get_user_id(session)
 
-        resp = await session.get(_util.prefix_url("/"))
+        resp = await session.get("https://m.facebook.com/")
 
         text = await resp.text()
         soup = find_input_fields(text)

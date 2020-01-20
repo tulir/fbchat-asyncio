@@ -35,7 +35,7 @@ from ._plan import GuestStatus, Plan
 from ._client import Client
 
 __title__ = "fbchat-asyncio"
-__version__ = "0.3.1b2"
+__version__ = "0.3.1b3"
 __description__ = "Facebook Messenger library for Python/Asyncio."
 
 __copyright__ = "Copyright 2015 - 2019 by Taehoon Kim"
