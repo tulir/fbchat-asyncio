@@ -7,7 +7,7 @@ except IOError:
 
 setuptools.setup(
     name="fbchat-asyncio",
-    version="0.3.1b3",
+    version="0.3.1b4",
     url="https://github.com/tulir/fbchat-asyncio",
 
     author="Tulir Asokan",

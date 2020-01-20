@@ -183,7 +183,7 @@ class State:
         # TODO: Automatically set user_id when the cookie changes in the session
         user_id = get_user_id(session)
 
-        resp = await session.get("https://m.facebook.com/")
+        resp = await session.get(_util.prefix_url("/"))
 
         text = await resp.text()
         soup = find_input_fields(text)
@@ -193,7 +193,18 @@ class State:
             fb_dtsg = fb_dtsg_element["value"]
         else:
             # Fall back to searching with a regex
-            fb_dtsg = FB_DTSG_REGEX.search(text).group(1)
+            match = FB_DTSG_REGEX.search(text)
+            if match:
+                fb_dtsg = match.group(1)
+            else:
+                m_resp = await session.get("https://m.facebook.com/")
+                m_text = await m_resp.text()
+                m_soup = find_input_fields(m_text)
+                fb_dtsg_element = m_soup.find("input", {"name": "fb_dtsg"})
+                if fb_dtsg_element:
+                    fb_dtsg = fb_dtsg_element["value"]
+                else:
+                    raise ValueError("Could not find value for fb_dtsg")
 
         revision = int(text.split('"client_revision":', 1)[1].split(",", 1)[0])
 
