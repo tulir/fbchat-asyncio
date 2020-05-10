@@ -33,7 +33,7 @@ class Plan:
     #: The plan's unique identifier.
     id = attr.ib(converter=str, type=str)
 
-    def fetch(self) -> "PlanData":
+    async def fetch(self) -> "PlanData":
         """Fetch fresh `PlanData` object.
 
         Example:
@@ -42,11 +42,11 @@ class Plan:
             "A plan"
         """
         data = {"event_reminder_id": self.id}
-        j = self.session._payload_post("/ajax/eventreminder", data)
+        j = await self.session._payload_post("/ajax/eventreminder", data)
         return PlanData._from_fetch(self.session, j)
 
     @classmethod
-    def _create(
+    async def _create(
         cls,
         thread,
         name: str,
@@ -63,11 +63,11 @@ class Plan:
             "location_name": location_name or "",
             "acontext": ACONTEXT,
         }
-        j = thread.session._payload_post("/ajax/eventreminder/create", data)
+        j = await thread.session._payload_post("/ajax/eventreminder/create", data)
         if "error" in j:
             raise _exception.ExternalError("Failed creating plan", j["error"])
 
-    def edit(
+    async def edit(
         self,
         name: str,
         at: datetime.datetime,
@@ -87,40 +87,40 @@ class Plan:
             "title": name,
             "acontext": ACONTEXT,
         }
-        j = self.session._payload_post("/ajax/eventreminder/submit", data)
+        j = await self.session._payload_post("/ajax/eventreminder/submit", data)
 
-    def delete(self):
+    async def delete(self):
         """Delete the plan.
 
         Example:
             >>> plan.delete()
         """
         data = {"event_reminder_id": self.id, "delete": "true", "acontext": ACONTEXT}
-        j = self.session._payload_post("/ajax/eventreminder/submit", data)
+        j = await self.session._payload_post("/ajax/eventreminder/submit", data)
 
-    def _change_participation(self):
+    async def _change_participation(self, take_part):
         data = {
             "event_reminder_id": self.id,
             "guest_state": "GOING" if take_part else "DECLINED",
             "acontext": ACONTEXT,
         }
-        j = self.session._payload_post("/ajax/eventreminder/rsvp", data)
+        j = await self.session._payload_post("/ajax/eventreminder/rsvp", data)
 
-    def participate(self):
+    async def participate(self):
         """Set yourself as GOING/participating to the plan.
 
         Example:
             >>> plan.participate()
         """
-        return self._change_participation(True)
+        return await self._change_participation(True)
 
-    def decline(self):
+    async def decline(self):
         """Set yourself as having DECLINED the plan.
 
         Example:
             >>> plan.decline()
         """
-        return self._change_participation(False)
+        return await self._change_participation(False)
 
 
 @attrs_default

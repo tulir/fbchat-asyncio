@@ -69,7 +69,7 @@ class Poll:
             options_count=data["total_count"],
         )
 
-    def fetch_options(self) -> Sequence[PollOption]:
+    async def fetch_options(self) -> Sequence[PollOption]:
         """Fetch all `PollOption` objects on the poll.
 
         The result is ordered with options with the most votes first.
@@ -80,10 +80,10 @@ class Poll:
             "An option"
         """
         data = {"question_id": self.id}
-        j = self.session._payload_post("/ajax/mercury/get_poll_options", data)
+        j = await self.session._payload_post("/ajax/mercury/get_poll_options", data)
         return [PollOption._from_graphql(m) for m in j]
 
-    def set_votes(self, option_ids: Iterable[str], new_options: Iterable[str] = None):
+    async def set_votes(self, option_ids: Iterable[str], new_options: Iterable[str] = None):
         """Update the user's poll vote.
 
         Args:
@@ -105,7 +105,7 @@ class Poll:
         for i, option_text in enumerate(new_options or ()):
             data["new_options[{}]".format(i)] = option_text
 
-        j = self.session._payload_post(
+        j = await self.session._payload_post(
             "/messaging/group_polling/update_vote/?dpr=1", data
         )
         if j.get("status") != "success":

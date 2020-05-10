@@ -3,6 +3,7 @@
 Copyright:
     (c) 2015 - 2018 by Taehoon Kim
     (c) 2018 - 2020 by Mads Marquart
+    (c) 2020 by Tulir Asokan
 
 License:
     BSD 3-Clause, see LICENSE for more details.
@@ -118,9 +119,7 @@ from ._listen import Listener
 
 from ._client import Client
 
-__version__ = "2.0.0a3"
-
-__all__ = ("Session", "Listener", "Client")
+__version__ = "0.4.0"
 
 
 from . import _fix_module_metadata

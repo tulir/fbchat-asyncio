@@ -1,9 +1,10 @@
 import attr
 import datetime
-import requests
+import aiohttp
 import random
 import re
 import json
+from http.cookies import SimpleCookie
 
 # TODO: Only import when required
 # Or maybe just replace usage with `html.parser`?
@@ -12,7 +13,7 @@ import bs4
 from ._common import log, kw_only
 from . import _graphql, _util, _exception
 
-from typing import Optional, Mapping, Callable, Any
+from typing import Optional, Mapping, Callable, Any, Awaitable
 
 
 SERVER_JS_DEFINE_REGEX = re.compile(r'require\("ServerJSDefine"\)\)?\.handleDefines\(')
@@ -78,24 +79,26 @@ def generate_message_id(now: datetime.datetime, client_id: str) -> str:
     return "<{}:{}-{}@mail.projektitan.com>".format(k, l, client_id)
 
 
-def get_user_id(session: requests.Session) -> str:
-    # TODO: Optimize this `.get_dict()` call!
-    cookies = session.cookies.get_dict()
-    rtn = cookies.get("c_user")
+def get_user_id(session: aiohttp.ClientSession) -> str:
+    try:
+        rtn = session.cookie_jar._cookies["messenger.com"].get("c_user")
+    except (AttributeError, KeyError):
+        raise _exception.ParseError("Could not find user id", data=session.cookie_jar._cookies)
     if rtn is None:
-        raise _exception.ParseError("Could not find user id", data=cookies)
-    return str(rtn)
+        raise _exception.ParseError("Could not find user id", data=session.cookie_jar._cookies)
+    return str(rtn.value)
 
 
-def session_factory() -> requests.Session:
+def session_factory() -> aiohttp.ClientSession:
     from . import __version__
 
-    session = requests.session()
-    session.headers["Referer"] = "https://www.messenger.com/"
-    # We won't try to set a fake user agent to mask our presence!
-    # Facebook allows us access anyhow, and it makes our motives clearer:
-    # We're not trying to cheat Facebook, we simply want to access their service
-    session.headers["User-Agent"] = "fbchat/{}".format(__version__)
+    session = aiohttp.ClientSession(headers={
+        "Referer": "https://www.messenger.com/",
+        # We won't try to set a fake user agent to mask our presence!
+        # Facebook allows us access anyhow, and it makes our motives clearer:
+        # We're not trying to cheat Facebook, we simply want to access their service
+        "User-Agent": "fbchat-asyncio/{}".format(__version__)
+    })
     return session
 
 
@@ -127,43 +130,44 @@ def find_form_request(html: str):
     return url, data
 
 
-def two_factor_helper(session: requests.Session, r, on_2fa_callback):
-    url, data = find_form_request(r.content.decode("utf-8"))
+async def two_factor_helper(session: aiohttp.ClientSession, r: aiohttp.ClientResponse,
+                            on_2fa_callback: Callable[[], Awaitable[int]]) -> str:
+    url, data = find_form_request(await r.text())
 
     # You don't have to type a code if your device is already saved
     # Repeats if you get the code wrong
     while "approvals_code" in data:
-        data["approvals_code"] = on_2fa_callback()
+        data["approvals_code"] = await on_2fa_callback()
         log.info("Submitting 2FA code")
-        r = session.post(url, data=data, allow_redirects=False)
-        url, data = find_form_request(r.content.decode("utf-8"))
+        r = await session.post(url, data=data, allow_redirects=False)
+        url, data = find_form_request(await r.text())
 
     # TODO: Can be missing if checkup flow was done on another device in the meantime?
     if "name_action_selected" in data:
         data["name_action_selected"] = "save_device"
         log.info("Saving browser")
-        r = session.post(url, data=data, allow_redirects=False)
-        url, data = find_form_request(r.content.decode("utf-8"))
+        r = await session.post(url, data=data, allow_redirects=False)
+        url, data = find_form_request(await r.text())
 
     log.info("Starting Facebook checkup flow")
-    r = session.post(url, data=data, allow_redirects=False)
+    r = await session.post(url, data=data, allow_redirects=False)
 
-    url, data = find_form_request(r.content.decode("utf-8"))
+    url, data = find_form_request(await r.text())
     if "submit[This was me]" not in data or "submit[This wasn't me]" not in data:
         raise _exception.ParseError("Could not fill out form properly (2)", data=data)
     data["submit[This was me]"] = "[any value]"
     del data["submit[This wasn't me]"]
     log.info("Verifying login attempt")
-    r = session.post(url, data=data, allow_redirects=False)
+    r = await session.post(url, data=data, allow_redirects=False)
 
-    url, data = find_form_request(r.content.decode("utf-8"))
+    url, data = find_form_request(await r.text())
     if "name_action_selected" not in data:
         raise _exception.ParseError("Could not fill out form properly (3)", data=data)
     data["name_action_selected"] = "save_device"
     log.info("Saving device again")
-    r = session.post(url, data=data, allow_redirects=False)
+    r = await session.post(url, data=data, allow_redirects=False)
 
-    print(r.status_code, r.url, r.headers)
+    print(r.status, r.url, r.headers)
     return r.headers.get("Location")
 
 
@@ -195,8 +199,8 @@ class Session:
     _user_id = attr.ib(type=str)
     _fb_dtsg = attr.ib(type=str)
     _revision = attr.ib(type=int)
-    _session = attr.ib(factory=session_factory, type=requests.Session)
-    _counter = attr.ib(0, type=int)
+    _session = attr.ib(factory=session_factory, type=aiohttp.ClientSession)
+    _counter = attr.ib(default=0, type=int)
     _client_id = attr.ib(factory=client_id_factory, type=str)
 
     @property
@@ -223,8 +227,8 @@ class Session:
 
     # TODO: Add ability to load previous cookies in here, to avoid 2fa flow
     @classmethod
-    def login(
-        cls, email: str, password: str, on_2fa_callback: Callable[[], int] = None
+    async def login(
+        cls, email: str, password: str, on_2fa_callback: Callable[[], Awaitable[int]] = None
     ):
         """Login the user, using ``email`` and ``password``.
 
@@ -273,20 +277,21 @@ class Session:
         try:
             # Should hit a redirect to https://www.messenger.com/
             # If this does happen, the session is logged in!
-            r = session.post(
+            r = await session.post(
                 "https://www.messenger.com/login/password/",
                 data=data,
                 allow_redirects=False,
             )
-        except requests.RequestException as e:
+        except aiohttp.ClientError as e:
             _exception.handle_requests_error(e)
-        _exception.handle_http_error(r.status_code)
+            raise Exception("handle_requests_error did not raise exception")
+        _exception.handle_http_error(r.status)
 
         url = r.headers.get("Location")
 
         # We weren't redirected, hence the email or password was wrong
         if not url:
-            error = get_error_data(r.content.decode("utf-8"))
+            error = get_error_data(await r.text())
             raise _exception.NotLoggedIn(error)
 
         if "checkpoint" in url:
@@ -298,25 +303,25 @@ class Session:
             # This probably works differently for Messenger-only accounts
             url = _util.get_url_parameter(url, "next")
             # Explicitly allow redirects
-            r = session.get(url, allow_redirects=True)
-            url = two_factor_helper(session, r, on_2fa_callback)
+            r = await session.get(url, allow_redirects=True)
+            url = await two_factor_helper(session, r, on_2fa_callback)
 
             if not url.startswith("https://www.messenger.com/login/auth_token/"):
                 raise _exception.ParseError("Failed 2fa flow", data=url)
 
-            r = session.get(url, allow_redirects=False)
+            r = await session.get(url, allow_redirects=False)
             url = r.headers.get("Location")
 
         if url != "https://www.messenger.com/":
-            error = get_error_data(r.content.decode("utf-8"))
+            error = get_error_data(await r.text())
             raise _exception.NotLoggedIn("Failed logging in: {}, {}".format(url, error))
 
         try:
-            return cls._from_session(session=session)
+            return await cls._from_session(session=session)
         except _exception.NotLoggedIn as e:
             raise _exception.ParseError("Failed loading session", data=r) from e
 
-    def is_logged_in(self) -> bool:
+    async def is_logged_in(self) -> bool:
         """Send a request to Facebook to check the login status.
 
         Returns:
@@ -327,13 +332,14 @@ class Session:
         """
         # Send a request to the login url, to see if we're directed to the home page
         try:
-            r = self._session.get(prefix_url("/login/"), allow_redirects=False)
-        except requests.RequestException as e:
+            r = await self._session.get(prefix_url("/login/"), allow_redirects=False)
+        except aiohttp.ClientError as e:
             _exception.handle_requests_error(e)
-        _exception.handle_http_error(r.status_code)
+            raise Exception("handle_requests_error did not raise exception")
+        _exception.handle_http_error(r.status)
         return "https://www.messenger.com/" == r.headers.get("Location")
 
-    def logout(self) -> None:
+    async def logout(self) -> None:
         """Safely log out the user.
 
         The session object must not be used after this action has been performed!
@@ -343,12 +349,13 @@ class Session:
         """
         data = {"fb_dtsg": self._fb_dtsg}
         try:
-            r = self._session.post(
+            r = await self._session.post(
                 prefix_url("/logout/"), data=data, allow_redirects=False
             )
-        except requests.RequestException as e:
+        except aiohttp.ClientError as e:
             _exception.handle_requests_error(e)
-        _exception.handle_http_error(r.status_code)
+            raise Exception("handle_requests_error did not raise exception")
+        _exception.handle_http_error(r.status)
 
         if "Location" not in r.headers:
             raise _exception.FacebookError("Failed logging out, was not redirected!")
@@ -358,18 +365,19 @@ class Session:
             )
 
     @classmethod
-    def _from_session(cls, session):
+    async def _from_session(cls, session):
         # TODO: Automatically set user_id when the cookie changes in the session
         user_id = get_user_id(session)
 
         # Make a request to the main page to retrieve ServerJSDefine entries
         try:
-            r = session.get(prefix_url("/"), allow_redirects=False)
-        except requests.RequestException as e:
+            r = await session.get(prefix_url("/"), allow_redirects=False)
+        except aiohttp.ClientError as e:
             _exception.handle_requests_error(e)
-        _exception.handle_http_error(r.status_code)
+            raise Exception("handle_requests_error did not raise exception")
+        _exception.handle_http_error(r.status)
 
-        define = parse_server_js_define(r.content.decode("utf-8"))
+        define = parse_server_js_define(await r.text())
 
         fb_dtsg = get_fb_dtsg(define)
         if fb_dtsg is None:
@@ -387,7 +395,7 @@ class Session:
 
         return cls(user_id=user_id, fb_dtsg=fb_dtsg, revision=revision, session=session)
 
-    def get_cookies(self) -> Mapping[str, str]:
+    def get_cookies(self) -> Optional[SimpleCookie]:
         """Retrieve session cookies, that can later be used in `from_cookies`.
 
         Returns:
@@ -396,10 +404,10 @@ class Session:
         Example:
             >>> cookies = session.get_cookies()
         """
-        return self._session.cookies.get_dict()
+        return self._session.cookie_jar._cookies["messenger.com"]
 
     @classmethod
-    def from_cookies(cls, cookies: Mapping[str, str]):
+    async def from_cookies(cls, cookies: SimpleCookie):
         """Load a session from session cookies.
 
         Args:
@@ -411,30 +419,37 @@ class Session:
             >>> session = fbchat.Session.from_cookies(cookies)
         """
         session = session_factory()
-        session.cookies = requests.cookies.merge_cookies(session.cookies, cookies)
-        return cls._from_session(session=session)
+        session.cookie_jar._cookies["messenger.com"] = cookies
+        return await cls._from_session(session=session)
 
-    def _post(self, url, data, files=None, as_graphql=False):
+    async def _post(self, url, data, files=None, as_graphql=False):
         data.update(self._get_params())
+        if files:
+            payload = aiohttp.FormData()
+            for key, value in data.items():
+                payload.add_field(key, str(value))
+            for key, (name, file, content_type) in files.items():
+                payload.add_field(key, file, filename=name, content_type=content_type)
+            data = payload
         try:
-            r = self._session.post(prefix_url(url), data=data, files=files)
-        except requests.RequestException as e:
+            r = await self._session.post(prefix_url(url), data=data)
+        except aiohttp.ClientError as e:
             _exception.handle_requests_error(e)
-        # Facebook's encoding is always UTF-8
-        r.encoding = "utf-8"
-        _exception.handle_http_error(r.status_code)
-        if r.text is None or len(r.text) == 0:
+            raise Exception("handle_requests_error did not raise exception")
+        _exception.handle_http_error(r.status)
+        text = await r.text()
+        if text is None or len(text) == 0:
             raise _exception.HTTPError("Error when sending request: Got empty response")
         if as_graphql:
-            return _graphql.response_to_json(r.text)
+            return _graphql.response_to_json(text)
         else:
-            text = _util.strip_json_cruft(r.text)
+            text = _util.strip_json_cruft(text)
             j = _util.parse_json(text)
             log.debug(j)
             return j
 
-    def _payload_post(self, url, data, files=None):
-        j = self._post(url, data, files=files)
+    async def _payload_post(self, url, data, files=None):
+        j = await self._post(url, data, files=files)
         _exception.handle_payload_error(j)
 
         # update fb_dtsg token if received in response
@@ -449,7 +464,7 @@ class Session:
         except (KeyError, TypeError) as e:
             raise _exception.ParseError("Missing payload", data=j) from e
 
-    def _graphql_requests(self, *queries):
+    async def _graphql_requests(self, *queries):
         # TODO: Explain usage of GraphQL, probably in the docs
         # Perhaps provide this API as public?
         data = {
@@ -457,9 +472,9 @@ class Session:
             "response_format": "json",
             "queries": _graphql.queries_to_json(*queries),
         }
-        return self._post("/api/graphqlbatch/", data, as_graphql=True)
+        return await self._post("/api/graphqlbatch/", data, as_graphql=True)
 
-    def _do_send_request(self, data):
+    async def _do_send_request(self, data):
         now = datetime.datetime.utcnow()
         offline_threading_id = _util.generate_offline_threading_id()
         data["client"] = "mercury"
@@ -470,7 +485,7 @@ class Session:
         data["message_id"] = offline_threading_id
         data["threading_id"] = generate_message_id(now, self._client_id)
         data["ephemeral_ttl_mode:"] = "0"
-        j = self._post("/messaging/send/", data)
+        j = await self._post("/messaging/send/", data)
 
         _exception.handle_payload_error(j)
 

@@ -4,7 +4,7 @@ import datetime
 from ._common import log, attrs_default
 from . import _exception, _util, _graphql, _session, _threads, _models
 
-from typing import Sequence, Iterable, Tuple, Optional, Set, BinaryIO
+from typing import Sequence, Iterable, Tuple, Optional, Set, BinaryIO, AsyncIterator
 
 
 @attrs_default
@@ -22,7 +22,7 @@ class Client:
     #: The session to use when making requests.
     session = attr.ib(type=_session.Session)
 
-    def fetch_users(self) -> Sequence[_threads.UserData]:
+    async def fetch_users(self) -> Sequence[_threads.UserData]:
         """Fetch users the client is currently chatting with.
 
         This is very close to your friend list, with the follow differences:
@@ -43,7 +43,7 @@ class Client:
             "A user"
         """
         data = {"viewer": self.session.user.id}
-        j = self.session._payload_post("/chat/user_info_all", data)
+        j = await self.session._payload_post("/chat/user_info_all", data)
 
         users = []
         for data in j.values():
@@ -53,7 +53,7 @@ class Client:
             users.append(_threads.UserData._from_all_fetch(self.session, data))
         return users
 
-    def search_for_users(self, name: str, limit: int) -> Iterable[_threads.UserData]:
+    async def search_for_users(self, name: str, limit: int) -> Iterable[_threads.UserData]:
         """Find and get users by their name.
 
         The returned users are ordered by relevance.
@@ -70,7 +70,7 @@ class Client:
             "A user"
         """
         params = {"search": name, "limit": limit}
-        (j,) = self.session._graphql_requests(
+        (j,) = await self.session._graphql_requests(
             _graphql.from_query(_graphql.SEARCH_USER, params)
         )
 
@@ -79,7 +79,7 @@ class Client:
             for node in j[name]["users"]["nodes"]
         )
 
-    def search_for_pages(self, name: str, limit: int) -> Iterable[_threads.PageData]:
+    async def search_for_pages(self, name: str, limit: int) -> Iterable[_threads.PageData]:
         """Find and get pages by their name.
 
         The returned pages are ordered by relevance.
@@ -96,7 +96,7 @@ class Client:
             "A page"
         """
         params = {"search": name, "limit": limit}
-        (j,) = self.session._graphql_requests(
+        (j,) = await self.session._graphql_requests(
             _graphql.from_query(_graphql.SEARCH_PAGE, params)
         )
 
@@ -105,7 +105,7 @@ class Client:
             for node in j[name]["pages"]["nodes"]
         )
 
-    def search_for_groups(self, name: str, limit: int) -> Iterable[_threads.GroupData]:
+    async def search_for_groups(self, name: str, limit: int) -> Iterable[_threads.GroupData]:
         """Find and get group threads by their name.
 
         The returned groups are ordered by relevance.
@@ -122,7 +122,7 @@ class Client:
             "A group"
         """
         params = {"search": name, "limit": limit}
-        (j,) = self.session._graphql_requests(
+        (j,) = await self.session._graphql_requests(
             _graphql.from_query(_graphql.SEARCH_GROUP, params)
         )
 
@@ -131,7 +131,7 @@ class Client:
             for node in j["viewer"]["groups"]["nodes"]
         )
 
-    def search_for_threads(self, name: str, limit: int) -> Iterable[_threads.ThreadABC]:
+    async def search_for_threads(self, name: str, limit: int) -> Iterable[_threads.ThreadABC]:
         """Find and get threads by their name.
 
         The returned threads are ordered by relevance.
@@ -149,7 +149,7 @@ class Client:
             "A user"
         """
         params = {"search": name, "limit": limit}
-        (j,) = self.session._graphql_requests(
+        (j,) = await self.session._graphql_requests(
             _graphql.from_query(_graphql.SEARCH_THREAD, params)
         )
 
@@ -169,9 +169,9 @@ class Client:
                     "Unknown type {} in {}".format(repr(node["__typename"]), node)
                 )
 
-    def _search_messages(self, query, offset, limit):
+    async def _search_messages(self, query, offset, limit):
         data = {"query": query, "offset": offset, "limit": limit}
-        j = self.session._payload_post("/ajax/mercury/search_snippets.php?dpr=1", data)
+        j = await self.session._payload_post("/ajax/mercury/search_snippets.php?dpr=1", data)
 
         total_snippets = j["search_snippets"][query]
 
@@ -201,9 +201,9 @@ class Client:
 
         return rtn
 
-    def search_messages(
+    async def search_messages(
         self, query: str, limit: Optional[int]
-    ) -> Iterable[Tuple[_threads.ThreadABC, int]]:
+    ) -> AsyncIterator[Tuple[_threads.ThreadABC, int]]:
         """Search for messages in all threads.
 
         Intended to be used alongside `ThreadABC.search_messages`.
@@ -233,7 +233,7 @@ class Client:
         offset = 0
         # The max limit is measured empirically to ~500, safe default chosen below
         for limit in _util.get_limits(limit, max_limit=100):
-            data = self._search_messages(query, offset, limit)
+            data = await self._search_messages(query, offset, limit)
             for thread, total_snippets in data:
                 if thread:
                     yield (thread, total_snippets)
@@ -241,9 +241,9 @@ class Client:
                 return  # No more data to fetch
             offset += limit
 
-    def _fetch_info(self, *ids):
+    async def _fetch_info(self, *ids):
         data = {"ids[{}]".format(i): _id for i, _id in enumerate(ids)}
-        j = self.session._payload_post("/chat/user_info/", data)
+        j = await self.session._payload_post("/chat/user_info/", data)
 
         if j.get("profiles") is None:
             raise _exception.ParseError("No users/pages returned", data=j)
@@ -274,7 +274,7 @@ class Client:
         log.debug(entries)
         return entries
 
-    def fetch_thread_info(self, ids: Iterable[str]) -> Iterable[_threads.ThreadABC]:
+    async def fetch_thread_info(self, ids: Iterable[str]) -> AsyncIterator[_threads.ThreadABC]:
         """Fetch threads' info from IDs, unordered.
 
         Warning:
@@ -302,7 +302,7 @@ class Client:
             }
             queries.append(_graphql.from_doc_id("2147762685294928", params))
 
-        j = self.session._graphql_requests(*queries)
+        j = await self.session._graphql_requests(*queries)
 
         for i, entry in enumerate(j):
             if entry.get("message_thread") is None:
@@ -319,7 +319,7 @@ class Client:
         ]
         pages_and_users = {}
         if len(pages_and_user_ids) != 0:
-            pages_and_users = self._fetch_info(*pages_and_user_ids)
+            pages_and_users = await self._fetch_info(*pages_and_user_ids)
 
         for i, entry in enumerate(j):
             entry = entry["message_thread"]
@@ -340,7 +340,7 @@ class Client:
             else:
                 raise _exception.ParseError("Unknown thread type", data=entry)
 
-    def _fetch_threads(self, limit, before, folders):
+    async def _fetch_threads(self, limit, before, folders):
         params = {
             "limit": limit,
             "tags": folders,
@@ -348,7 +348,7 @@ class Client:
             "includeDeliveryReceipts": True,
             "includeSeqID": False,
         }
-        (j,) = self.session._graphql_requests(
+        (j,) = await self.session._graphql_requests(
             _graphql.from_doc_id("1349387578499440", params)
         )
 
@@ -364,11 +364,11 @@ class Client:
                 log.warning("Unknown thread type: %s, data: %s", _type, node)
         return rtn
 
-    def fetch_threads(
+    async def fetch_threads(
         self,
         limit: Optional[int],
         location: _models.ThreadLocation = _models.ThreadLocation.INBOX,
-    ) -> Iterable[_threads.ThreadABC]:
+    ) -> AsyncIterator[_threads.ThreadABC]:
         """Fetch the client's thread list.
 
         The returned threads are ordered by last active first.
@@ -395,7 +395,7 @@ class Client:
         seen_ids = set()  # type: Set[str]
         before = None
         for limit in _util.get_limits(limit, MAX_BATCH_LIMIT):
-            threads = self._fetch_threads(limit, before, [location.value])
+            threads = await self._fetch_threads(limit, before, [location.value])
 
             before = None
             for thread in threads:
@@ -413,7 +413,7 @@ class Client:
             if not before:
                 raise ValueError("Too many unknown threads.")
 
-    def fetch_unread(self) -> Sequence[_threads.ThreadABC]:
+    async def fetch_unread(self) -> Sequence[_threads.ThreadABC]:
         """Fetch unread threads.
 
         Warning:
@@ -426,7 +426,7 @@ class Client:
             "last_action_timestamp": _util.datetime_to_millis(at),
             # 'last_action_timestamp': 0
         }
-        j = self.session._payload_post("/ajax/mercury/unread_threads.php", form)
+        j = await self.session._payload_post("/ajax/mercury/unread_threads.php", form)
 
         result = j["unread_thread_fbids"][0]
         # TODO: Parse Pages?
@@ -438,13 +438,13 @@ class Client:
             for id_ in result["other_user_fbids"]
         ]
 
-    def fetch_unseen(self) -> Sequence[_threads.ThreadABC]:
+    async def fetch_unseen(self) -> Sequence[_threads.ThreadABC]:
         """Fetch unseen / new threads.
 
         Warning:
             This is not finished, and the API may change at any point!
         """
-        j = self.session._payload_post("/mercury/unseen_thread_ids/", {})
+        j = await self.session._payload_post("/mercury/unseen_thread_ids/", {})
 
         result = j["unseen_thread_fbids"][0]
         # TODO: Parse Pages?
@@ -456,7 +456,7 @@ class Client:
             for id_ in result["other_user_fbids"]
         ]
 
-    def fetch_image_url(self, image_id: str) -> str:
+    async def fetch_image_url(self, image_id: str) -> str:
         """Fetch URL to download the original image from an image attachment ID.
 
         Args:
@@ -471,7 +471,7 @@ class Client:
         """
         image_id = str(image_id)
         data = {"photo_id": str(image_id)}
-        j = self.session._post("/mercury/attachments/photo/", data)
+        j = await self.session._post("/mercury/attachments/photo/", data)
         _exception.handle_payload_error(j)
 
         if "jsmods" not in j:
@@ -482,25 +482,25 @@ class Client:
         # Return the first argument
         return require["ServerRedirect.redirectPageTo"][0]
 
-    def _get_private_data(self):
-        (j,) = self.session._graphql_requests(
+    async def _get_private_data(self):
+        (j,) = await self.session._graphql_requests(
             _graphql.from_doc_id("1868889766468115", {})
         )
         return j["viewer"]
 
-    def get_phone_numbers(self) -> Sequence[str]:
+    async def get_phone_numbers(self) -> Sequence[str]:
         """Fetch the user's phone numbers."""
-        data = self._get_private_data()
+        data = await self._get_private_data()
         return [
             j["phone_number"]["universal_number"] for j in data["user"]["all_phones"]
         ]
 
-    def get_emails(self) -> Sequence[str]:
+    async def get_emails(self) -> Sequence[str]:
         """Fetch the user's emails."""
-        data = self._get_private_data()
+        data = await self._get_private_data()
         return [j["display_email"] for j in data["all_emails"]]
 
-    def upload(
+    async def upload(
         self, files: Iterable[Tuple[str, BinaryIO, str]], voice_clip: bool = False
     ) -> Sequence[Tuple[str, str]]:
         """Upload files to Facebook.
@@ -523,7 +523,7 @@ class Client:
 
         data = {"voice_clip": voice_clip}
 
-        j = self.session._payload_post(
+        j = await self.session._payload_post(
             "https://upload.messenger.com/ajax/mercury/upload.php",
             data,
             files=file_dict,
@@ -537,7 +537,7 @@ class Client:
             for item in j["metadata"]
         ]
 
-    def mark_as_delivered(self, message: _models.Message):
+    async def mark_as_delivered(self, message: _models.Message):
         """Mark a message as delivered.
 
         Warning:
@@ -550,9 +550,9 @@ class Client:
             "message_ids[0]": message.id,
             "thread_ids[%s][0]" % message.thread.id: message.id,
         }
-        j = self.session._payload_post("/ajax/mercury/delivery_receipts.php", data)
+        j = await self.session._payload_post("/ajax/mercury/delivery_receipts.php", data)
 
-    def _read_status(self, read, threads, at):
+    async def _read_status(self, read, threads, at):
         data = {
             "watermarkTimestamp": _util.datetime_to_millis(at),
             "shouldSendReadReceipt": "true",
@@ -561,9 +561,9 @@ class Client:
         for thread in threads:
             data["ids[{}]".format(thread.id)] = "true" if read else "false"
 
-        j = self.session._payload_post("/ajax/mercury/change_read_status.php", data)
+        j = await self.session._payload_post("/ajax/mercury/change_read_status.php", data)
 
-    def mark_as_read(
+    async def mark_as_read(
         self, threads: Iterable[_threads.ThreadABC], at: datetime.datetime
     ):
         """Mark threads as read.
@@ -574,9 +574,9 @@ class Client:
             threads: Threads to set as read
             at: Timestamp to signal the read cursor at
         """
-        return self._read_status(True, threads, at)
+        return await self._read_status(True, threads, at)
 
-    def mark_as_unread(
+    async def mark_as_unread(
         self, threads: Iterable[_threads.ThreadABC], at: datetime.datetime
     ):
         """Mark threads as unread.
@@ -587,14 +587,14 @@ class Client:
             threads: Threads to set as unread
             at: Timestamp to signal the read cursor at
         """
-        return self._read_status(False, threads, at)
+        return await self._read_status(False, threads, at)
 
-    def mark_as_seen(self, at: datetime.datetime):
+    async def mark_as_seen(self, at: datetime.datetime):
         # TODO: Documenting this
         data = {"seen_timestamp": _util.datetime_to_millis(at)}
-        j = self.session._payload_post("/ajax/mercury/mark_seen.php", data)
+        j = await self.session._payload_post("/ajax/mercury/mark_seen.php", data)
 
-    def move_threads(
+    async def move_threads(
         self, location: _models.ThreadLocation, threads: Iterable[_threads.ThreadABC]
     ):
         """Move threads to specified location.
@@ -612,19 +612,19 @@ class Client:
             for thread in threads:
                 data_archive["ids[{}]".format(thread.id)] = "true"
                 data_unpin["ids[{}]".format(thread.id)] = "false"
-            j_archive = self.session._payload_post(
+            j_archive = await self.session._payload_post(
                 "/ajax/mercury/change_archived_status.php?dpr=1", data_archive
             )
-            j_unpin = self.session._payload_post(
+            j_unpin = await self.session._payload_post(
                 "/ajax/mercury/change_pinned_status.php?dpr=1", data_unpin
             )
         else:
             data = {}
             for i, thread in enumerate(threads):
                 data["{}[{}]".format(location.name.lower(), i)] = thread.id
-            j = self.session._payload_post("/ajax/mercury/move_threads.php", data)
+            j = await self.session._payload_post("/ajax/mercury/move_threads.php", data)
 
-    def delete_threads(self, threads: Iterable[_threads.ThreadABC]):
+    async def delete_threads(self, threads: Iterable[_threads.ThreadABC]):
         """Bulk delete threads.
 
         Args:
@@ -634,9 +634,9 @@ class Client:
             >>> group = fbchat.Group(session=session, id="1234")
             >>> client.delete_threads([group])
         """
-        _threads.ThreadABC._delete_many(self.session, (t.id for t in threads))
+        await _threads.ThreadABC._delete_many(self.session, (t.id for t in threads))
 
-    def delete_messages(self, messages: Iterable[_models.Message]):
+    async def delete_messages(self, messages: Iterable[_models.Message]):
         """Bulk delete specified messages.
 
         Args:
@@ -647,4 +647,4 @@ class Client:
             >>> message2 = fbchat.Message(thread=thread, id="2345")
             >>> client.delete_threads([message1, message2])
         """
-        _models.Message._delete_many(self.session, (m.id for m in messages))
+        await _models.Message._delete_many(self.session, (m.id for m in messages))

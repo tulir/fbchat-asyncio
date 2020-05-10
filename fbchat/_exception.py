@@ -1,5 +1,6 @@
 import attr
-import requests
+import aiohttp
+import asyncio
 
 from typing import Any, Optional
 
@@ -151,15 +152,15 @@ def handle_http_error(code):
 
 
 def handle_requests_error(e):
-    if isinstance(e, requests.ConnectionError):
+    if isinstance(e, (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError)):
         raise HTTPError("Connection error") from e
-    if isinstance(e, requests.HTTPError):
+    if isinstance(e, aiohttp.ClientResponseError):
         pass  # Raised when using .raise_for_status, so should never happen
-    if isinstance(e, requests.URLRequired):
+    if isinstance(e, aiohttp.InvalidURL):
         pass  # Should never happen, we always prove valid URLs
-    if isinstance(e, requests.TooManyRedirects):
+    if isinstance(e, aiohttp.TooManyRedirects):
         pass  # TODO: Consider using allow_redirects=False to prevent this
-    if isinstance(e, requests.Timeout):
+    if isinstance(e, (aiohttp.ServerTimeoutError, asyncio.TimeoutError)):
         pass  # Should never happen, we don't set timeouts
 
     raise HTTPError("Requests error") from e

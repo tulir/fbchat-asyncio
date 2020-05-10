@@ -1,11 +1,12 @@
 import attr
 import random
 import paho.mqtt.client
-import requests
+import asyncio
+import aiohttp
 from ._common import log, kw_only
 from . import _util, _exception, _session, _graphql, _events
 
-from typing import Iterable, Optional, Mapping, List
+from typing import AsyncIterator, Optional, List
 
 
 HOST = "edge-chat.messenger.com"
@@ -48,12 +49,10 @@ TOPICS = [
 ]
 
 
-def get_cookie_header(session: requests.Session, url: str) -> str:
+def get_cookie_header(session: aiohttp.ClientSession, url: str) -> str:
     """Extract a cookie header from a requests session."""
     # The cookies are extracted this way to make sure they're escaped correctly
-    return requests.cookies.get_cookie_header(
-        session.cookies, requests.Request("GET", url),
-    )
+    return session.cookie_jar.filter_cookies(url).output(header="", sep=";").lstrip()
 
 
 def generate_session_id() -> int:
@@ -79,7 +78,7 @@ def mqtt_factory() -> paho.mqtt.client.Client:
     return mqtt
 
 
-def fetch_sequence_id(session: _session.Session) -> int:
+async def fetch_sequence_id(session: _session.Session) -> int:
     """Fetch sequence ID."""
     params = {
         "limit": 0,
@@ -90,7 +89,7 @@ def fetch_sequence_id(session: _session.Session) -> int:
     }
     log.debug("Fetching MQTT sequence ID")
     # Same doc id as in `Client.fetch_threads`
-    (j,) = session._graphql_requests(_graphql.from_doc_id("1349387578499440", params))
+    (j,) = await session._graphql_requests(_graphql.from_doc_id("1349387578499440", params))
     sequence_id = j["viewer"]["message_threads"]["sync_sequence_id"]
     if not sequence_id:
         raise _exception.NotLoggedIn("Failed fetching sequence id")
@@ -115,15 +114,33 @@ class Listener:
     session = attr.ib(type=_session.Session)
     _chat_on = attr.ib(type=bool)
     _foreground = attr.ib(type=bool)
+    _loop = attr.ib(factory=asyncio.get_event_loop, type=asyncio.AbstractEventLoop)
     _mqtt = attr.ib(factory=mqtt_factory, type=paho.mqtt.client.Client)
-    _sync_token = attr.ib(None, type=Optional[str])
-    _sequence_id = attr.ib(None, type=Optional[int])
+    _sync_token = attr.ib(default=None, type=Optional[str])
+    _sequence_id = attr.ib(default=None, type=Optional[int])
     _tmp_events = attr.ib(factory=list, type=List[_events.Event])
+    _message_queue = attr.ib(factory=lambda: asyncio.Queue(maxsize=64), type=asyncio.Queue)
 
     def __attrs_post_init__(self):
         # Configure callbacks
         self._mqtt.on_message = self._on_message_handler
         self._mqtt.on_connect = self._on_connect_handler
+        self._mqtt.on_socket_open = self.on_socket_open
+        self._mqtt.on_socket_close = self.on_socket_close
+        self._mqtt.on_socket_register_write = self.on_socket_register_write
+        self._mqtt.on_socket_unregister_write = self.on_socket_unregister_write
+
+    def on_socket_open(self, client, userdata, sock):
+        self._loop.add_reader(sock, client.loop_read)
+
+    def on_socket_close(self, client, userdata, sock):
+        self._loop.remove_reader(sock)
+
+    def on_socket_register_write(self, client, userdata, sock):
+        self._loop.add_writer(sock, client.loop_write)
+
+    def on_socket_unregister_write(self, client, userdata, sock):
+        self._loop.remove_writer(sock)
 
     def _handle_ms(self, j):
         """Handle /t_ms special logic.
@@ -180,10 +197,8 @@ class Listener:
                 return
 
         try:
-            # TODO: Don't handle this in a callback
-            self._tmp_events = list(
-                _events.parse_events(self.session, message.topic, j)
-            )
+            for event in _events.parse_events(self.session, message.topic, j):
+                self._message_queue.put_nowait(event)
         except _exception.ParseError:
             log.exception("Failed parsing MQTT data")
 
@@ -273,7 +288,7 @@ class Listener:
             "Cookie": get_cookie_header(
                 self.session._session, "https://edge-chat.messenger.com/chat"
             ),
-            "User-Agent": self.session._session.headers["User-Agent"],
+            "User-Agent": self.session._session._default_headers["User-Agent"],
             "Origin": "https://www.messenger.com",
             "Host": HOST,
         }
@@ -300,7 +315,7 @@ class Listener:
             self._mqtt._reconnect_wait()
             return False
 
-    def listen(self) -> Iterable[_events.Event]:
+    async def listen(self) -> AsyncIterator[_events.Event]:
         """Run the listening loop continually.
 
         This is a blocking call, that will yield events as they arrive.
@@ -315,7 +330,8 @@ class Listener:
             ...     print(event)
         """
         if self._sequence_id is None:
-            self._sequence_id = fetch_sequence_id(self.session)
+            self._sequence_id = await fetch_sequence_id(self.session)
+        # TODO add some limits for all the infinite while loops
 
         # Make sure we're connected
         while not self._reconnect():
@@ -324,12 +340,19 @@ class Listener:
         yield _events.Connect()
 
         while True:
-            rc = self._mqtt.loop(timeout=1.0)
+            try:
+                await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                self.disconnect()
+                # this might not be necessary
+                self._mqtt.loop_misc()
+                break
+            rc = self._mqtt.loop_misc()
 
             # The sequence ID was reset in _handle_ms
             # TODO: Signal to the user that they should reload their data!
             if self._sequence_id is None:
-                self._sequence_id = fetch_sequence_id(self.session)
+                self._sequence_id = await fetch_sequence_id(self.session)
                 self._messenger_queue_publish()
 
             # If disconnect() has been called
@@ -358,9 +381,11 @@ class Listener:
 
                 yield _events.Connect()
 
-            if self._tmp_events:
-                yield from self._tmp_events
-                self._tmp_events = []
+            while True:
+                try:
+                    yield self._message_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
 
     def disconnect(self) -> None:
         """Disconnect the MQTT listener.

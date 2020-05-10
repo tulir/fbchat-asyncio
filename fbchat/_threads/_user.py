@@ -60,41 +60,41 @@ class User(ThreadABC):
     def _copy(self) -> "User":
         return User(session=self.session, id=self.id)
 
-    def confirm_friend_request(self):
+    async def confirm_friend_request(self):
         """Confirm a friend request, adding the user to your friend list.
 
         Example:
             >>> user.confirm_friend_request()
         """
         data = {"to_friend": self.id, "action": "confirm"}
-        j = self.session._payload_post("/ajax/add_friend/action.php?dpr=1", data)
+        j = await self.session._payload_post("/ajax/add_friend/action.php?dpr=1", data)
 
-    def remove_friend(self):
+    async def remove_friend(self):
         """Remove the user from the client's friend list.
 
         Example:
             >>> user.remove_friend()
         """
         data = {"uid": self.id}
-        j = self.session._payload_post("/ajax/profile/removefriendconfirm.php", data)
+        j = await self.session._payload_post("/ajax/profile/removefriendconfirm.php", data)
 
-    def block(self):
+    async def block(self):
         """Block messages from the user.
 
         Example:
             >>> user.block()
         """
         data = {"fbid": self.id}
-        j = self.session._payload_post("/messaging/block_messages/?dpr=1", data)
+        j = await self.session._payload_post("/messaging/block_messages/?dpr=1", data)
 
-    def unblock(self):
+    async def unblock(self):
         """Unblock a previously blocked user.
 
         Example:
             >>> user.unblock()
         """
         data = {"fbid": self.id}
-        j = self.session._payload_post("/messaging/unblock_messages/?dpr=1", data)
+        j = await self.session._payload_post("/messaging/unblock_messages/?dpr=1", data)
 
 
 @attrs_default

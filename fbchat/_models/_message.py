@@ -95,13 +95,13 @@ class Message:
         return self.thread.session
 
     @staticmethod
-    def _delete_many(session, message_ids):
+    async def _delete_many(session, message_ids):
         data = {}
         for i, id_ in enumerate(message_ids):
             data["message_ids[{}]".format(i)] = id_
-        j = session._payload_post("/ajax/mercury/delete_messages.php?dpr=1", data)
+        j = await session._payload_post("/ajax/mercury/delete_messages.php?dpr=1", data)
 
-    def delete(self):
+    async def delete(self):
         """Delete the message (removes it only for the user).
 
         If you want to delete multiple messages, please use `Client.delete_messages`.
@@ -109,9 +109,9 @@ class Message:
         Example:
             >>> message.delete()
         """
-        self._delete_many(self.session, [self.id])
+        await self._delete_many(self.session, [self.id])
 
-    def unsend(self):
+    async def unsend(self):
         """Unsend the message (removes it for everyone).
 
         The message must to be sent by you, and less than 10 minutes ago.
@@ -120,9 +120,9 @@ class Message:
             >>> message.unsend()
         """
         data = {"message_id": self.id}
-        j = self.session._payload_post("/messaging/unsend_message/?dpr=1", data)
+        j = await self.session._payload_post("/messaging/unsend_message/?dpr=1", data)
 
-    def react(self, reaction: Optional[str]):
+    async def react(self, reaction: Optional[str]):
         """React to the message, or removes reaction.
 
         Currently, you can use "❤", "😍", "😆", "😮", "😢", "😠", "👍" or "👎". It
@@ -150,10 +150,10 @@ class Message:
             "doc_id": 1491398900900362,
             "variables": _util.json_minimal({"data": data}),
         }
-        j = self.session._payload_post("/webgraphql/mutation", data)
+        j = await self.session._payload_post("/webgraphql/mutation", data)
         _exception.handle_graphql_errors(j)
 
-    def fetch(self) -> "MessageData":
+    async def fetch(self) -> "MessageData":
         """Fetch fresh `MessageData` object.
 
         Example:
@@ -161,7 +161,7 @@ class Message:
             >>> message.text
             "The message text"
         """
-        message_info = self.thread._forced_fetch(self.id).get("message")
+        message_info = await self.thread._forced_fetch(self.id).get("message")
         return MessageData._from_graphql(self.thread, message_info)
 
     @staticmethod
