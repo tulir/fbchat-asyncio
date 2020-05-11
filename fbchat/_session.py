@@ -4,7 +4,8 @@ import aiohttp
 import random
 import re
 import json
-from http.cookies import SimpleCookie
+from yarl import URL
+from http.cookies import SimpleCookie, BaseCookie
 
 # TODO: Only import when required
 # Or maybe just replace usage with `html.parser`?
@@ -81,7 +82,7 @@ def generate_message_id(now: datetime.datetime, client_id: str) -> str:
 
 def get_user_id(session: aiohttp.ClientSession) -> str:
     try:
-        rtn = session.cookie_jar._cookies["messenger.com"].get("c_user")
+        rtn = session.cookie_jar.filter_cookies(URL("https://messenger.com")).get("c_user")
     except (AttributeError, KeyError):
         raise _exception.ParseError("Could not find user id", data=session.cookie_jar._cookies)
     if rtn is None:
@@ -394,7 +395,7 @@ class Session:
 
         return cls(user_id=user_id, fb_dtsg=fb_dtsg, revision=revision, session=session)
 
-    def get_cookies(self) -> Optional[SimpleCookie]:
+    def get_cookies(self) -> Optional[Mapping[str, str]]:
         """Retrieve session cookies, that can later be used in `from_cookies`.
 
         Returns:
@@ -403,10 +404,11 @@ class Session:
         Example:
             >>> cookies = session.get_cookies()
         """
-        return self._session.cookie_jar._cookies["messenger.com"]
+        cookie = self._session.cookie_jar.filter_cookies(URL("https://messenger.com"))
+        return {key: morsel.value for key, morsel in cookie.items()}
 
     @classmethod
-    async def from_cookies(cls, cookies: SimpleCookie):
+    async def from_cookies(cls, cookies: Mapping[str, str]):
         """Load a session from session cookies.
 
         Args:
@@ -418,7 +420,16 @@ class Session:
             >>> session = fbchat.Session.from_cookies(cookies)
         """
         session = session_factory()
-        session.cookie_jar._cookies["messenger.com"] = cookies
+
+        if isinstance(cookies, BaseCookie):
+            cookie = cookies
+        else:
+            cookie = SimpleCookie()
+            for key, value in cookies.items():
+                cookie[key] = value
+                cookie[key].update({"domain": "messenger.com", "path": "/"})
+        session.cookie_jar.update_cookies(cookie, URL("https://messenger.com"))
+
         return await cls._from_session(session=session)
 
     async def _post(self, url, data, files=None, as_graphql=False):
