@@ -29,9 +29,9 @@ class Plan:
     """
 
     #: The session to use when making requests.
-    session = attr.ib(type=_session.Session)
+    session: _session.Session
     #: The plan's unique identifier.
-    id = attr.ib(converter=str, type=str)
+    id: str = attr.ib(converter=str)
 
     async def fetch(self) -> "PlanData":
         """Fetch fresh `PlanData` object.
@@ -128,17 +128,17 @@ class PlanData(Plan):
     """Represents data about a plan."""
 
     #: Plan time, only precise down to the minute
-    time = attr.ib(type=datetime.datetime)
+    time: datetime.datetime
     #: Plan title
-    title = attr.ib(type=str)
+    title: str
     #: Plan location name
-    location = attr.ib(None, converter=lambda x: x or "", type=Optional[str])
+    location: Optional[str] = attr.ib(default=None, converter=lambda x: x or "")
     #: Plan location ID
-    location_id = attr.ib(None, converter=lambda x: x or "", type=Optional[str])
+    location_id: Optional[str] = attr.ib(default=None, converter=lambda x: x or "")
     #: ID of the plan creator
-    author_id = attr.ib(None, type=Optional[str])
+    author_id: Optional[str] = None
     #: `User` ids mapped to their `GuestStatus`
-    guests = attr.ib(None, type=Optional[Mapping[str, GuestStatus]])
+    guests: Optional[Mapping[str, GuestStatus]] = None
 
     @property
     def going(self) -> Sequence[str]:

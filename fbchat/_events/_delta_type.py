@@ -11,9 +11,9 @@ class ColorSet(ThreadEvent):
     """Somebody set the color in a thread."""
 
     #: The new color. Not limited to the ones in `ThreadABC.set_color`
-    color = attr.ib(type=str)
+    color: str
     #: When the color was set
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -27,9 +27,9 @@ class EmojiSet(ThreadEvent):
     """Somebody set the emoji in a thread."""
 
     #: The new emoji
-    emoji = attr.ib(type=str)
+    emoji: str
     #: When the emoji was set
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -43,11 +43,11 @@ class NicknameSet(ThreadEvent):
     """Somebody set the nickname of a person in a thread."""
 
     #: The person whose nickname was set
-    subject = attr.ib(type=str)
+    subject: str
     #: The new nickname. If ``None``, the nickname was cleared
-    nickname = attr.ib(type=Optional[str])
+    nickname: Optional[str]
     #: When the nickname was set
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -66,9 +66,9 @@ class AdminsAdded(ThreadEvent):
     """Somebody added admins to a group."""
 
     #: The people that were set as admins
-    added = attr.ib(type=Sequence["_threads.User"])
+    added: Sequence["_threads.User"]
     #: When the admins were added
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -82,9 +82,9 @@ class AdminsRemoved(ThreadEvent):
     """Somebody removed admins from a group."""
 
     #: The people that were removed as admins
-    removed = attr.ib(type=Sequence["_threads.User"])
+    removed: Sequence["_threads.User"]
     #: When the admins were removed
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -97,9 +97,9 @@ class AdminsRemoved(ThreadEvent):
 class ApprovalModeSet(ThreadEvent):
     """Somebody changed the approval mode in a group."""
 
-    require_admin_approval = attr.ib(type=bool)
+    require_admin_approval: bool
     #: When the approval mode was set
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -113,7 +113,7 @@ class CallStarted(ThreadEvent):
     """Somebody started a call."""
 
     #: When the call was started
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -126,9 +126,9 @@ class CallEnded(ThreadEvent):
     """Somebody ended a call."""
 
     #: How long the call took
-    duration = attr.ib(type=datetime.timedelta)
+    duration: datetime.timedelta
     #: When the call ended
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -142,7 +142,7 @@ class CallJoined(ThreadEvent):
     """Somebody joined a call."""
 
     #: When the call ended
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -155,9 +155,9 @@ class PollCreated(ThreadEvent):
     """Somebody created a group poll."""
 
     #: The new poll
-    poll = attr.ib(type="_models.Poll")
+    poll: "_models.Poll"
     #: When the poll was created
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -172,13 +172,13 @@ class PollVoted(ThreadEvent):
     """Somebody voted in a group poll."""
 
     #: The updated poll
-    poll = attr.ib(type="_models.Poll")
+    poll: "_models.Poll"
     #: Ids of the voted options
-    added_ids = attr.ib(type=Sequence[str])
+    added_ids: Sequence[str]
     #: Ids of the un-voted options
-    removed_ids = attr.ib(type=Sequence[str])
+    removed_ids: Sequence[str]
     #: When the poll was voted in
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -202,9 +202,9 @@ class PlanCreated(ThreadEvent):
     """Somebody created a plan in a group."""
 
     #: The new plan
-    plan = attr.ib(type="_models.PlanData")
+    plan: "_models.PlanData"
     #: When the plan was created
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -218,9 +218,9 @@ class PlanEnded(ThreadEvent):
     """A plan ended."""
 
     #: The ended plan
-    plan = attr.ib(type="_models.PlanData")
+    plan: "_models.PlanData"
     #: When the plan ended
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -234,9 +234,9 @@ class PlanEdited(ThreadEvent):
     """Somebody changed a plan in a group."""
 
     #: The updated plan
-    plan = attr.ib(type="_models.PlanData")
+    plan: "_models.PlanData"
     #: When the plan was updated
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -250,9 +250,9 @@ class PlanDeleted(ThreadEvent):
     """Somebody removed a plan in a group."""
 
     #: The removed plan
-    plan = attr.ib(type="_models.PlanData")
+    plan: "_models.PlanData"
     #: When the plan was removed
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -266,11 +266,11 @@ class PlanResponded(ThreadEvent):
     """Somebody responded to a plan in a group."""
 
     #: The plan that was responded to
-    plan = attr.ib(type="_models.PlanData")
+    plan: "_models.PlanData"
     #: Whether the author will go to the plan or not
-    take_part = attr.ib(type=bool)
+    take_part: bool
     #: When the plan was removed
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):

@@ -20,7 +20,7 @@ class Client:
     """
 
     #: The session to use when making requests.
-    session = attr.ib(type=_session.Session)
+    session: _session.Session
 
     async def fetch_users(self) -> Sequence[_threads.UserData]:
         """Fetch users the client is currently chatting with.

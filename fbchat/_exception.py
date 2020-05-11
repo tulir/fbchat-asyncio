@@ -5,7 +5,7 @@ import asyncio
 from typing import Any, Optional
 
 # Not frozen, since that doesn't work in PyPy
-@attr.s(slots=True, auto_exc=True)
+@attr.s(slots=True, auto_exc=True, auto_attribs=True)
 class FacebookError(Exception):
     """Base class for all custom exceptions raised by ``fbchat``.
 
@@ -13,15 +13,15 @@ class FacebookError(Exception):
     """
 
     #: A message describing the error
-    message = attr.ib(type=str)
+    message: str
 
 
-@attr.s(slots=True, auto_exc=True)
+@attr.s(slots=True, auto_exc=True, auto_attribs=True)
 class HTTPError(FacebookError):
     """Base class for errors with the HTTP(s) connection to Facebook."""
 
     #: The returned HTTP status code, if relevant
-    status_code = attr.ib(None, type=Optional[int])
+    status_code: Optional[int] = None
 
     def __str__(self):
         if not self.status_code:
@@ -29,14 +29,14 @@ class HTTPError(FacebookError):
         return "Got {} response: {}".format(self.status_code, self.message)
 
 
-@attr.s(slots=True, auto_exc=True)
+@attr.s(slots=True, auto_exc=True, auto_attribs=True)
 class ParseError(FacebookError):
     """Raised when we fail parsing a response from Facebook.
 
     This may contain sensitive data, so should not be logged to file.
     """
 
-    data = attr.ib(type=Any)
+    data: Any
     """The data that triggered the error.
 
     The format of this cannot be relied on, it's only for debugging purposes.
@@ -47,19 +47,19 @@ class ParseError(FacebookError):
         return msg.format(self.message, self.data)
 
 
-@attr.s(slots=True, auto_exc=True)
+@attr.s(slots=True, auto_exc=True, auto_attribs=True)
 class NotLoggedIn(FacebookError):
     """Raised by Facebook if the client has been logged out."""
 
 
-@attr.s(slots=True, auto_exc=True)
+@attr.s(slots=True, auto_exc=True, auto_attribs=True)
 class ExternalError(FacebookError):
     """Base class for errors that Facebook return."""
 
     #: The error message that Facebook returned (Possibly in the user's own language)
-    description = attr.ib(type=str)
+    description: str
     #: The error code that Facebook returned
-    code = attr.ib(None, type=Optional[int])
+    code: Optional[int] = None
 
     def __str__(self):
         if self.code:
@@ -67,14 +67,14 @@ class ExternalError(FacebookError):
         return "{}: {}".format(self.message, self.description)
 
 
-@attr.s(slots=True, auto_exc=True)
+@attr.s(slots=True, auto_exc=True, auto_attribs=True)
 class GraphQLError(ExternalError):
     """Raised by Facebook if there was an error in the GraphQL query."""
 
     # TODO: Handle multiple errors
 
     #: Query debug information
-    debug_info = attr.ib(None, type=Optional[str])
+    debug_info: Optional[str] = None
 
     def __str__(self):
         if self.debug_info:
@@ -82,7 +82,7 @@ class GraphQLError(ExternalError):
         return super().__str__()
 
 
-@attr.s(slots=True, auto_exc=True)
+@attr.s(slots=True, auto_exc=True, auto_attribs=True)
 class InvalidParameters(ExternalError):
     """Raised by Facebook if:
 
@@ -92,14 +92,14 @@ class InvalidParameters(ExternalError):
     """
 
 
-@attr.s(slots=True, auto_exc=True)
+@attr.s(slots=True, auto_exc=True, auto_attribs=True)
 class PleaseRefresh(ExternalError):
     """Raised by Facebook if the client has been inactive for too long.
 
     This error usually happens after 1-2 days of inactivity.
     """
 
-    code = attr.ib(1357004)
+    code: int = 1357004
 
 
 def handle_payload_error(j):

@@ -18,9 +18,9 @@ class Page(ThreadABC):
     # TODO: Implement pages properly, the implementation is lacking in a lot of places!
 
     #: The session to use when making requests.
-    session = attr.ib(type=_session.Session)
+    session: _session.Session
     #: The unique identifier of the page.
-    id = attr.ib(converter=str, type=str)
+    id: str = attr.ib(converter=str)
 
     def _to_send_data(self):
         return {"other_user_fbid": self.id}
@@ -37,25 +37,25 @@ class PageData(Page):
     """
 
     #: The page's picture
-    photo = attr.ib(type=_models.Image)
+    photo: _models.Image
     #: The name of the page
-    name = attr.ib(type=str)
+    name: str
     #: When the thread was last active / when the last message was sent
-    last_active = attr.ib(None, type=Optional[datetime.datetime])
+    last_active: Optional[datetime.datetime] = None
     #: Number of messages in the thread
-    message_count = attr.ib(None, type=Optional[int])
+    message_count: Optional[int] = None
     #: Set `Plan`
-    plan = attr.ib(None, type=Optional[_models.PlanData])
+    plan: Optional[_models.PlanData] = None
     #: The page's custom URL
-    url = attr.ib(None, type=Optional[str])
+    url: Optional[str] = None
     #: The name of the page's location city
-    city = attr.ib(None, type=Optional[str])
+    city: Optional[str] = None
     #: Amount of likes the page has
-    likes = attr.ib(None, type=Optional[int])
+    likes: Optional[int] = None
     #: Some extra information about the page
-    sub_title = attr.ib(None, type=Optional[str])
+    sub_title: Optional[str] = None
     #: The page's category
-    category = attr.ib(None, type=Optional[str])
+    category: Optional[str] = None
 
     @classmethod
     def _from_graphql(cls, session, data):

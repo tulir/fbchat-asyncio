@@ -15,7 +15,7 @@ class Typing(ThreadEvent):
     """Somebody started/stopped typing in a thread."""
 
     #: ``True`` if the user started typing, ``False`` if they stopped
-    status = attr.ib(type=bool)
+    status: bool
 
     @classmethod
     def _parse_orca(cls, session, data):
@@ -36,7 +36,7 @@ class FriendRequest(Event):
     """Somebody sent a friend request."""
 
     #: The user that sent the request
-    author = attr.ib(type="_threads.User")
+    author: "_threads.User"
 
     @classmethod
     def _parse(cls, session, data):
@@ -54,9 +54,9 @@ class Presence(Event):
     # TODO: Document this better!
 
     #: User ids mapped to their active status
-    statuses = attr.ib(type=Mapping[str, "_models.ActiveStatus"])
+    statuses: Mapping[str, "_models.ActiveStatus"]
     #: ``True`` if the list is fully updated and ``False`` if it's partially updated
-    full = attr.ib(type=bool)
+    full: bool
 
     @classmethod
     def _parse(cls, session, data):
@@ -83,7 +83,7 @@ class Disconnect(Event):
     """
 
     #: The reason / error string for the disconnect
-    reason = attr.ib(type=str)
+    reason: str
 
 
 def parse_events(session, topic, data):

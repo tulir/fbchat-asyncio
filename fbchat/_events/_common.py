@@ -5,7 +5,7 @@ from .. import _exception, _util, _threads
 from typing import Any
 
 #: Default attrs settings for events
-attrs_event = attr.s(slots=True, kw_only=kw_only, frozen=True)
+attrs_event = attr.s(slots=True, kw_only=kw_only, auto_attribs=True)
 
 
 @attrs_event
@@ -29,9 +29,9 @@ class UnknownEvent(Event):
     """Represent an unknown event."""
 
     #: Some data describing the unknown event's origin
-    source = attr.ib(type=str)
+    source: str
     #: The unknown data. This cannot be relied on, it's only for debugging purposes.
-    data = attr.ib(type=Any)
+    data: Any
 
     @classmethod
     def _parse(cls, session, data):
@@ -43,9 +43,9 @@ class ThreadEvent(Event):
     """Represent an event that was done by a user/page in a thread."""
 
     #: The person who did the action
-    author = attr.ib(type="_threads.User")  # Or Union[User, Page]?
+    author: "_threads.User"  # Or Union[User, Page]?
     #: Thread that the action was done in
-    thread = attr.ib(type="_threads.ThreadABC")
+    thread: "_threads.ThreadABC"
 
     @classmethod
     def _parse_metadata(cls, session, data):

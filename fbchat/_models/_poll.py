@@ -9,15 +9,15 @@ class PollOption:
     """Represents a poll option."""
 
     #: ID of the poll option
-    id = attr.ib(converter=str, type=str)
+    id: str = attr.ib(converter=str)
     #: Text of the poll option
-    text = attr.ib(type=str)
+    text: str
     #: Whether vote when creating or client voted
-    vote = attr.ib(type=bool)
+    vote: bool
     #: ID of the users who voted for this poll option
-    voters = attr.ib(type=Sequence[str])
+    voters: Sequence[str]
     #: Votes count
-    votes_count = attr.ib(type=int)
+    votes_count: int
 
     @classmethod
     def _from_graphql(cls, data):
@@ -49,15 +49,15 @@ class Poll:
     """Represents a poll."""
 
     #: ID of the poll
-    session = attr.ib(type=_session.Session)
+    session: _session.Session
     #: ID of the poll
-    id = attr.ib(converter=str, type=str)
+    id: str = attr.ib(converter=str)
     #: The poll's question
-    question = attr.ib(type=str)
+    question: str
     #: The poll's top few options. The full list can be fetched with `fetch_options`
-    options = attr.ib(type=Sequence[PollOption])
+    options: Sequence[PollOption]
     #: Options count
-    options_count = attr.ib(type=int)
+    options_count: int
 
     @classmethod
     def _from_graphql(cls, session, data):

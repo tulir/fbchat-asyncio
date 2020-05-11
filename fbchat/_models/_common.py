@@ -23,11 +23,11 @@ class ThreadLocation(enum.Enum):
 @attrs_default
 class ActiveStatus:
     #: Whether the user is active now
-    active = attr.ib(type=bool)
+    active: bool
     #: When the user was last active
-    last_active = attr.ib(None, type=Optional[datetime.datetime])
+    last_active: Optional[datetime.datetime] = None
     #: Whether the user is playing Messenger game now
-    in_game = attr.ib(None, type=Optional[bool])
+    in_game: Optional[bool] = None
 
     @classmethod
     def _from_orca_presence(cls, data):
@@ -42,11 +42,11 @@ class ActiveStatus:
 @attrs_default
 class Image:
     #: URL to the image
-    url = attr.ib(type=str)
+    url: str
     #: Width of the image
-    width = attr.ib(None, type=Optional[int])
+    width: Optional[int] = None
     #: Height of the image
-    height = attr.ib(None, type=Optional[int])
+    height: Optional[int] = None
 
     @classmethod
     def _from_uri(cls, data):

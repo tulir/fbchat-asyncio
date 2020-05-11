@@ -805,9 +805,9 @@ class Thread(ThreadABC):
     """
 
     #: The session to use when making requests.
-    session = attr.ib(type=_session.Session)
+    session: _session.Session
     #: The unique identifier of the thread.
-    id = attr.ib(converter=str, type=str)
+    id: str = attr.ib(converter=str)
 
     def _to_send_data(self):
         raise NotImplementedError(

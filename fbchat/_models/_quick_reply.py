@@ -10,13 +10,13 @@ class QuickReply:
     """Represents a quick reply."""
 
     #: Payload of the quick reply
-    payload = attr.ib(None, type=Any)
+    payload: Any = None
     #: External payload for responses
-    external_payload = attr.ib(None, type=Any)
+    external_payload: Any = None
     #: Additional data
-    data = attr.ib(None, type=Any)
+    data: Any = None
     #: Whether it's a response for a quick reply
-    is_response = attr.ib(False, type=bool)
+    is_response: bool = False
 
 
 @attrs_default
@@ -24,9 +24,9 @@ class QuickReplyText(QuickReply):
     """Represents a text quick reply."""
 
     #: Title of the quick reply
-    title = attr.ib(None, type=Optional[str])
+    title: Optional[str] = None
     #: URL of the quick reply image
-    image_url = attr.ib(None, type=Optional[str])
+    image_url: Optional[str] = None
     #: Type of the quick reply
     _type = "text"
 
@@ -44,7 +44,7 @@ class QuickReplyPhoneNumber(QuickReply):
     """Represents a phone number quick reply (Doesn't work on mobile)."""
 
     #: URL of the quick reply image
-    image_url = attr.ib(None, type=Optional[str])
+    image_url: Optional[str] = None
     #: Type of the quick reply
     _type = "user_phone_number"
 
@@ -54,7 +54,7 @@ class QuickReplyEmail(QuickReply):
     """Represents an email quick reply (Doesn't work on mobile)."""
 
     #: URL of the quick reply image
-    image_url = attr.ib(None, type=Optional[str])
+    image_url: Optional[str] = None
     #: Type of the quick reply
     _type = "user_email"
 

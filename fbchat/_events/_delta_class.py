@@ -13,11 +13,11 @@ class PeopleAdded(ThreadEvent):
 
     # TODO: Add message id
 
-    thread = attr.ib(type="_threads.Group")  # Set the correct type
+    thread: "_threads.Group"  # Set the correct type
     #: The people who got added
-    added = attr.ib(type=Sequence["_threads.User"])
+    added: Sequence["_threads.User"]
     #: When the people were added
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -36,11 +36,11 @@ class PersonRemoved(ThreadEvent):
 
     # TODO: Add message id
 
-    thread = attr.ib(type="_threads.Group")  # Set the correct type
+    thread: "_threads.Group"  # Set the correct type
     #: Person who got removed
-    removed = attr.ib(type="_models.Message")
+    removed: "_threads.User"
     #: When the person were removed
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -53,11 +53,11 @@ class PersonRemoved(ThreadEvent):
 class TitleSet(ThreadEvent):
     """Somebody changed a group's title."""
 
-    thread = attr.ib(type="_threads.Group")  # Set the correct type
+    thread: "_threads.Group"  # Set the correct type
     #: The new title. If ``None``, the title was removed
-    title = attr.ib(type=Optional[str])
+    title: Optional[str]
     #: When the title was set
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -78,9 +78,9 @@ class UnfetchedThreadEvent(Event):
     # TODO: Present this in a way that users can fetch the changed group photo easily
 
     #: The thread the message was sent to
-    thread = attr.ib(type="_threads.ThreadABC")
+    thread: "_threads.ThreadABC"
     #: The message
-    message = attr.ib(type=Optional["_models.Message"])
+    message: Optional["_models.Message"]
 
     @classmethod
     def _parse(cls, session, data):
@@ -96,9 +96,9 @@ class MessagesDelivered(ThreadEvent):
     """Somebody marked messages as delivered in a thread."""
 
     #: The messages that were marked as delivered
-    messages = attr.ib(type=Sequence["_models.Message"])
+    messages: Sequence["_models.Message"]
     #: When the messages were delivered
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -117,11 +117,11 @@ class ThreadsRead(Event):
     """Somebody marked threads as read/seen."""
 
     #: The person who marked the threads as read
-    author = attr.ib(type="_threads.ThreadABC")
+    author: "_threads.ThreadABC"
     #: The threads that were marked as read
-    threads = attr.ib(type=Sequence["_threads.ThreadABC"])
+    threads: Sequence["_threads.ThreadABC"]
     #: When the threads were read
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse_read_receipt(cls, session, data):
@@ -144,9 +144,9 @@ class MessageEvent(ThreadEvent):
     """Somebody sent a message to a thread."""
 
     #: The sent message
-    message = attr.ib(type="_models.Message")
+    message: "_models.MessageData"
     #: When the threads were read
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -168,9 +168,9 @@ class ThreadFolder(Event):
     # TODO: Finish this
 
     #: The created thread
-    thread = attr.ib(type="_threads.ThreadABC")
+    thread: "_threads.ThreadABC"
     #: The folder/location
-    folder = attr.ib(type="_models.ThreadLocation")
+    folder: "_models.ThreadLocation"
 
     @classmethod
     def _parse(cls, session, data):

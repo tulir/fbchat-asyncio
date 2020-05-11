@@ -11,9 +11,9 @@ class ReactionEvent(ThreadEvent):
     """Somebody reacted to a message."""
 
     #: Message that the user reacted to
-    message = attr.ib(type="_models.Message")
+    message: "_models.Message"
 
-    reaction = attr.ib(type=Optional[str])
+    reaction: Optional[str]
     """The reaction.
 
     Not limited to the ones in `Message.react`.
@@ -35,7 +35,7 @@ class ReactionEvent(ThreadEvent):
 @attrs_event
 class UserStatusEvent(ThreadEvent):
     #: Whether the user was blocked or unblocked
-    blocked = attr.ib(type=bool)
+    blocked: bool
 
     @classmethod
     def _parse(cls, session, data):
@@ -70,9 +70,9 @@ class UnsendEvent(ThreadEvent):
     """Somebody unsent a message (which deletes it for everyone)."""
 
     #: The unsent message
-    message = attr.ib(type="_models.Message")
+    message: "_models.Message"
     #: When the message was unsent
-    at = attr.ib(type=datetime.datetime)
+    at: datetime.datetime
 
     @classmethod
     def _parse(cls, session, data):
@@ -90,9 +90,9 @@ class MessageReplyEvent(ThreadEvent):
     """Somebody replied to a message."""
 
     #: The sent message
-    message = attr.ib(type="_models.MessageData")
+    message: "_models.MessageData"
     #: The message that was replied to
-    replied_to = attr.ib(type="_models.MessageData")
+    replied_to: "_models.MessageData"
 
     @classmethod
     def _parse(cls, session, data):

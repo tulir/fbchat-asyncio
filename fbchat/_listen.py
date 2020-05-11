@@ -96,7 +96,7 @@ async def fetch_sequence_id(session: _session.Session) -> int:
     return int(sequence_id)
 
 
-@attr.s(slots=True, kw_only=kw_only, eq=False)
+@attr.s(slots=True, kw_only=kw_only, eq=False, auto_attribs=True)
 class Listener:
     """Listen to incoming Facebook events.
 
@@ -111,15 +111,15 @@ class Listener:
         >>> listener = fbchat.Listener(session, chat_on=True, foreground=True)
     """
 
-    session = attr.ib(type=_session.Session)
-    _chat_on = attr.ib(type=bool)
-    _foreground = attr.ib(type=bool)
-    _loop = attr.ib(factory=asyncio.get_event_loop, type=asyncio.AbstractEventLoop)
-    _mqtt = attr.ib(factory=mqtt_factory, type=paho.mqtt.client.Client)
-    _sync_token = attr.ib(default=None, type=Optional[str])
-    _sequence_id = attr.ib(default=None, type=Optional[int])
-    _tmp_events = attr.ib(factory=list, type=List[_events.Event])
-    _message_queue = attr.ib(factory=lambda: asyncio.Queue(maxsize=64), type=asyncio.Queue)
+    session: _session.Session
+    _chat_on: bool
+    _foreground: bool
+    _loop: asyncio.AbstractEventLoop = attr.ib(factory=asyncio.get_event_loop)
+    _mqtt: paho.mqtt.client.Client = attr.ib(factory=mqtt_factory)
+    _sync_token: Optional[str] = None
+    _sequence_id: Optional[int] = None
+    _tmp_events: List[_events.Event] = attr.ib(factory=list)
+    _message_queue: asyncio.Queue = attr.ib(factory=lambda: asyncio.Queue(maxsize=64))
 
     def __attrs_post_init__(self):
         # Configure callbacks

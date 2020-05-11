@@ -167,7 +167,6 @@ async def two_factor_helper(session: aiohttp.ClientSession, r: aiohttp.ClientRes
     log.info("Saving device again")
     r = await session.post(url, data=data, allow_redirects=False)
 
-    print(r.status, r.url, r.headers)
     return r.headers.get("Location")
 
 
@@ -189,19 +188,19 @@ def get_fb_dtsg(define) -> Optional[str]:
     return None
 
 
-@attr.s(slots=True, kw_only=kw_only, repr=False, eq=False)
+@attr.s(slots=True, kw_only=kw_only, repr=False, eq=False, auto_attribs=True)
 class Session:
     """Stores and manages state required for most Facebook requests.
 
     This is the main class, which is used to login to Facebook.
     """
 
-    _user_id = attr.ib(type=str)
-    _fb_dtsg = attr.ib(type=str)
-    _revision = attr.ib(type=int)
-    _session = attr.ib(factory=session_factory, type=aiohttp.ClientSession)
-    _counter = attr.ib(default=0, type=int)
-    _client_id = attr.ib(factory=client_id_factory, type=str)
+    _user_id: str
+    _fb_dtsg: str
+    _revision: int
+    _session: aiohttp.ClientSession = attr.ib(factory=session_factory)
+    _counter: int = 0
+    _client_id: str = attr.ib(factory=client_id_factory)
 
     @property
     def user(self):

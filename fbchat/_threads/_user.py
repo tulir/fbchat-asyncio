@@ -46,9 +46,9 @@ class User(ThreadABC):
     """
 
     #: The session to use when making requests.
-    session = attr.ib(type=_session.Session)
+    session: _session.Session
     #: The user's unique identifier.
-    id = attr.ib(converter=str, type=str)
+    id: str = attr.ib(converter=str)
 
     def _to_send_data(self):
         return {
@@ -105,35 +105,35 @@ class UserData(User):
     """
 
     #: The user's picture
-    photo = attr.ib(type=_models.Image)
+    photo: _models.Image
     #: The name of the user
-    name = attr.ib(type=str)
+    name: str
     #: Whether the user and the client are friends
-    is_friend = attr.ib(type=bool)
+    is_friend: bool
     #: The users first name
-    first_name = attr.ib(type=str)
+    first_name: str
     #: The users last name
-    last_name = attr.ib(None, type=Optional[str])
+    last_name: Optional[str] = None
     #: When the thread was last active / when the last message was sent
-    last_active = attr.ib(None, type=Optional[datetime.datetime])
+    last_active: Optional[datetime.datetime] = None
     #: Number of messages in the thread
-    message_count = attr.ib(None, type=Optional[int])
+    message_count: Optional[int] = None
     #: Set `Plan`
-    plan = attr.ib(None, type=Optional[_models.PlanData])
+    plan: Optional[_models.PlanData] = None
     #: The profile URL. ``None`` for Messenger-only users
-    url = attr.ib(None, type=Optional[str])
+    url: Optional[str] = None
     #: The user's gender
-    gender = attr.ib(None, type=Optional[str])
+    gender: Optional[str] = None
     #: From 0 to 1. How close the client is to the user
-    affinity = attr.ib(None, type=Optional[float])
+    affinity: Optional[float] = None
     #: The user's nickname
-    nickname = attr.ib(None, type=Optional[str])
+    nickname: Optional[str] = None
     #: The clients nickname, as seen by the user
-    own_nickname = attr.ib(None, type=Optional[str])
+    own_nickname: Optional[str] = None
     #: The message color
-    color = attr.ib(None, type=Optional[str])
+    color: Optional[str] = None
     #: The default emoji
-    emoji = attr.ib(None, type=Optional[str])
+    emoji: Optional[str] = None
 
     @staticmethod
     def _get_other_user(data):

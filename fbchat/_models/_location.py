@@ -15,15 +15,15 @@ class LocationAttachment(Attachment):
     """
 
     #: Latitude of the location
-    latitude = attr.ib(None, type=Optional[float])
+    latitude: Optional[float] = None
     #: Longitude of the location
-    longitude = attr.ib(None, type=Optional[float])
+    longitude: Optional[float] = None
     #: Image showing the map of the location
-    image = attr.ib(None, type=Optional[Image])
+    image: Optional[Image] = None
     #: URL to Bing maps with the location
-    url = attr.ib(None, type=Optional[str])
+    url: Optional[str] = None
     # Address of the location
-    address = attr.ib(None, type=Optional[str])
+    address: Optional[str] = None
 
     @classmethod
     def _from_graphql(cls, data):
@@ -54,11 +54,11 @@ class LiveLocationAttachment(LocationAttachment):
     """Represents a live user location."""
 
     #: Name of the location
-    name = attr.ib(None, type=Optional[str])
+    name: Optional[str] = None
     #: When live location expires
-    expires_at = attr.ib(None, type=Optional[datetime.datetime])
+    expires_at: Optional[datetime.datetime] = None
     #: True if live location is expired
-    is_expired = attr.ib(None, type=Optional[bool])
+    is_expired: Optional[bool] = None
 
     @classmethod
     def _from_pull(cls, data):
