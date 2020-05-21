@@ -87,7 +87,7 @@ def get_user_id(session: aiohttp.ClientSession) -> str:
         raise _exception.ParseError("Could not find user id", data=session.cookie_jar._cookies)
     if rtn is None:
         raise _exception.ParseError("Could not find user id", data=session.cookie_jar._cookies)
-    return str(rtn.value)
+    return rtn if isinstance(rtn, str) else str(rtn.value)
 
 
 def session_factory() -> aiohttp.ClientSession:
