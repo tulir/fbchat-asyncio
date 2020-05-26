@@ -1,4 +1,5 @@
 import attr
+import time
 import random
 import paho.mqtt.client
 import asyncio
@@ -298,7 +299,30 @@ class Listener:
             path="/chat?sid={}".format(session_id), headers=headers
         )
 
-    def _reconnect(self) -> bool:
+    async def _mqtt_reconnect_wait(self):
+        # This is copied from paho.mqtt's Client class to use asyncio.sleep instead of time.sleep
+        now = time.monotonic()
+        with self._mqtt._reconnect_delay_mutex:
+            if self._mqtt._reconnect_delay is None:
+                self._mqtt._reconnect_delay = self._mqtt._reconnect_min_delay
+            else:
+                self._mqtt._reconnect_delay = min(
+                    self._mqtt._reconnect_delay * 2,
+                    self._mqtt._reconnect_max_delay,
+                )
+
+            target_time = now + self._mqtt._reconnect_delay
+
+        remaining = target_time - now
+        while (self._mqtt._state != paho.mqtt.client.mqtt_cs_disconnecting
+                and not self._mqtt._thread_terminate
+                and remaining > 0):
+            wait_time = min(remaining, 1)
+            log.debug(f"Waiting for {wait_time} seconds before reconnecting...")
+            await asyncio.sleep(wait_time)
+            remaining = target_time - time.monotonic()
+
+    async def _reconnect(self) -> bool:
         # Try reconnecting
         self._configure_connect_options()
         try:
@@ -312,7 +336,7 @@ class Listener:
         ) as e:
             log.debug("MQTT reconnection failed: %s", e)
             # Wait before reconnecting
-            self._mqtt._reconnect_wait()
+            await self._mqtt_reconnect_wait()
             return False
 
     async def listen(self) -> AsyncIterator[_events.Event]:
@@ -334,7 +358,7 @@ class Listener:
         # TODO add some limits for all the infinite while loops
 
         # Make sure we're connected
-        while not self._reconnect():
+        while not await self._reconnect():
             pass
 
         yield _events.Connect()
@@ -376,7 +400,7 @@ class Listener:
                     reason = "MQTT Error: {}, retrying".format(err)
                     yield _events.Disconnect(reason=reason)
 
-                while not self._reconnect():
+                while not await self._reconnect():
                     pass
 
                 yield _events.Connect()
