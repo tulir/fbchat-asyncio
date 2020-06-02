@@ -4,7 +4,7 @@ import collections
 import datetime
 from .._common import log, attrs_default
 from .. import _util, _exception, _session, _graphql, _models
-from typing import MutableMapping, Mapping, Any, Iterable, Tuple, Optional
+from typing import MutableMapping, Mapping, Any, Iterable, Tuple, Optional, AsyncGenerator
 
 
 DEFAULT_COLOR = "#0084ff"
@@ -371,7 +371,8 @@ class ThreadABC(metaclass=abc.ABCMeta):
             for message in j["message_thread"]["messages"]["nodes"]
         ]
 
-    async def fetch_messages(self, limit: Optional[int]) -> Iterable["_models.Message"]:
+    async def fetch_messages(self, limit: Optional[int]
+                             ) -> AsyncGenerator["_models.MessageData", None]:
         """Fetch messages in a thread.
 
         The returned messages are ordered by last sent first.
