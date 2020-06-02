@@ -23,7 +23,7 @@ setuptools.setup(
         "beautifulsoup4~=4.0",
         "aiohttp",
         "yarl",
-        "paho.mqtt~=1.5",
+        "paho-mqtt~=1.5",
     ],
 
     python_requires="~=3.6",
