@@ -78,6 +78,7 @@ from ._events import (
     ThreadEvent,
     Connect,
     Disconnect,
+    Resync,
     # _client_payload
     ReactionEvent,
     UserStatusEvent,
@@ -119,7 +120,7 @@ from ._listen import Listener
 
 from ._client import Client
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 
 from . import _fix_module_metadata

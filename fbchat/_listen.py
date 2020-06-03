@@ -378,6 +378,7 @@ class Listener:
             if self._sequence_id is None:
                 self._sequence_id = await fetch_sequence_id(self.session)
                 self._messenger_queue_publish()
+                yield _events.Resync()
 
             # If disconnect() has been called
             # Beware, internal API, may have to change this to something more stable!

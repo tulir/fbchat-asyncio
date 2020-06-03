@@ -76,6 +76,11 @@ class Connect(Event):
 
 
 @attrs_event
+class Resync(Event):
+    """The sequence ID was reset in _handle_ms."""
+
+
+@attrs_event
 class Disconnect(Event):
     """The client lost the connection to Facebook.
 
