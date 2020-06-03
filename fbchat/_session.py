@@ -17,7 +17,7 @@ from . import _graphql, _util, _exception
 from typing import Optional, Mapping, Callable, Any, Awaitable
 
 
-SERVER_JS_DEFINE_REGEX = re.compile(r'require\("ServerJSDefine"\)\)?\.handleDefines\(')
+SERVER_JS_DEFINE_REGEX = re.compile(r'\(require\("ServerJS"\)\)\(\).handle\(')
 SERVER_JS_DEFINE_JSON_DECODER = json.JSONDecoder()
 
 
@@ -31,22 +31,21 @@ def parse_server_js_define(html: str) -> Mapping[str, Any]:
     # Skip leading entry
     _, *define_splits = define_splits
 
-    rtn = []
     if not define_splits:
         raise _exception.ParseError("Could not find any ServerJSDefine", data=html)
-    if len(define_splits) < 2:
-        raise _exception.ParseError("Could not find enough ServerJSDefine", data=html)
-    if len(define_splits) > 2:
+    if len(define_splits) > 1:
         raise _exception.ParseError("Found too many ServerJSDefine", data=define_splits)
-    # Parse entries (should be two)
-    for entry in define_splits:
-        try:
-            parsed, _ = SERVER_JS_DEFINE_JSON_DECODER.raw_decode(entry, idx=0)
-        except json.JSONDecodeError as e:
-            raise _exception.ParseError("Invalid ServerJSDefine", data=entry) from e
-        if not isinstance(parsed, list):
-            raise _exception.ParseError("Invalid ServerJSDefine", data=parsed)
-        rtn.extend(parsed)
+    try:
+        parsed, _ = SERVER_JS_DEFINE_JSON_DECODER.raw_decode(define_splits[0], idx=0)
+    except json.JSONDecodeError as e:
+        raise _exception.ParseError("Invalid ServerJSDefine", data=define_splits[0]) from e
+    try:
+        rtn = parsed["define"]
+    except KeyError:
+        raise _exception.ParseError("Invalid ServerJSDefine", data=parsed)
+
+    if not isinstance(rtn, list):
+        raise _exception.ParseError("Invalid ServerJSDefine", data=rtn)
 
     # Convert to a dict
     return _util.get_jsmods_define(rtn)
