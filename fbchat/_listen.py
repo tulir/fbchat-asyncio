@@ -378,6 +378,7 @@ class Listener:
                 await self._reconnect()
                 exit_if_not_connected = True
                 yield _events.Connect()
+                self._mqtt.subscribe([(topic, 0) for topic in TOPICS])
             else:
                 exit_if_not_connected = False
 
