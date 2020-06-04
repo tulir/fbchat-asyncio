@@ -53,6 +53,11 @@ class NotLoggedIn(FacebookError):
 
 
 @attr.s(slots=True, auto_exc=True, auto_attribs=True)
+class NotConnected(FacebookError):
+    """Raised by Facebook if the client has been logged out."""
+
+
+@attr.s(slots=True, auto_exc=True, auto_attribs=True)
 class ExternalError(FacebookError):
     """Base class for errors that Facebook return."""
 

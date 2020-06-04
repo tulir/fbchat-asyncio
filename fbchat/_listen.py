@@ -7,7 +7,7 @@ import aiohttp
 from ._common import log, kw_only
 from . import _util, _exception, _session, _graphql, _events
 
-from typing import AsyncIterator, Optional, List
+from typing import AsyncGenerator, Optional, List
 
 
 HOST = "edge-chat.messenger.com"
@@ -117,6 +117,7 @@ class Listener:
     _foreground: bool
     _loop: asyncio.AbstractEventLoop = attr.ib(factory=asyncio.get_event_loop)
     _mqtt: paho.mqtt.client.Client = attr.ib(factory=mqtt_factory)
+    _disconnect_error: Optional[Exception] = None
     _sync_token: Optional[str] = None
     _sequence_id: Optional[int] = None
     _tmp_events: List[_events.Event] = attr.ib(factory=list)
@@ -166,11 +167,10 @@ class Listener:
                 # much time passed, or that it was simply missing
                 # ERROR_QUEUE_OVERFLOW means that the sequence id was too small, so
                 # the desired events could not be retrieved
-                log.error(
+                log.warning(
                     "The MQTT listener was disconnected for too long,"
                     " events may have been lost"
                 )
-                # TODO: Find a way to tell the user that they may now be missing events
                 self._sync_token = None
                 self._sequence_id = None
                 return False
@@ -205,9 +205,12 @@ class Listener:
 
     def _on_connect_handler(self, client, userdata, flags, rc):
         if rc == 21:
-            raise _exception.FacebookError(
+            log.info("Return code 21 in connect handler, disconnecting and throwing error")
+            self.disconnect()
+            self._disconnect_error = _exception.NotConnected(
                 "Failed connecting. Maybe your cookies are wrong?"
             )
+            return
         if rc != 0:
             err = paho.mqtt.client.connack_string(rc)
             log.error("MQTT Connection Error: %s", err)
@@ -299,68 +302,36 @@ class Listener:
             path="/chat?sid={}".format(session_id), headers=headers
         )
 
-    async def _mqtt_reconnect_wait(self):
-        # This is copied from paho.mqtt's Client class to use asyncio.sleep instead of time.sleep
-        now = time.monotonic()
-        with self._mqtt._reconnect_delay_mutex:
-            if self._mqtt._reconnect_delay is None:
-                self._mqtt._reconnect_delay = self._mqtt._reconnect_min_delay
-            else:
-                self._mqtt._reconnect_delay = min(
-                    self._mqtt._reconnect_delay * 2,
-                    self._mqtt._reconnect_max_delay,
-                )
-
-            target_time = now + self._mqtt._reconnect_delay
-
-        remaining = target_time - now
-        while (self._mqtt._state != paho.mqtt.client.mqtt_cs_disconnecting
-                and not self._mqtt._thread_terminate
-                and remaining > 0):
-            wait_time = min(remaining, 1)
-            log.debug(f"Waiting for {wait_time} seconds before reconnecting...")
-            await asyncio.sleep(wait_time)
-            remaining = target_time - time.monotonic()
-
-    async def _reconnect(self) -> bool:
+    async def _reconnect(self) -> None:
         # Try reconnecting
         self._configure_connect_options()
         try:
             self._mqtt.reconnect()
-            return True
         except (
             # Taken from .loop_forever
             paho.mqtt.client.socket.error,
             OSError,
             paho.mqtt.client.WebsocketConnectionError,
         ) as e:
-            log.debug("MQTT reconnection failed: %s", e)
-            # Wait before reconnecting
-            await self._mqtt_reconnect_wait()
-            return False
+            raise _exception.NotLoggedIn("MQTT reconnection failed") from e
 
-    async def listen(self) -> AsyncIterator[_events.Event]:
+    async def listen(self) -> AsyncGenerator[_events.Event, Optional[bool]]:
         """Run the listening loop continually.
 
         This is a blocking call, that will yield events as they arrive.
 
-        This will automatically reconnect on errors, except if the errors are one of
-        `PleaseRefresh` or `NotLoggedIn`.
-
         Example:
             Print events continually.
 
-            >>> for event in listener.listen():
+            >>> listener = Listener(session)
+            >>> async for event in listener.listen():
             ...     print(event)
         """
         if self._sequence_id is None:
             self._sequence_id = await fetch_sequence_id(self.session)
         # TODO add some limits for all the infinite while loops
 
-        # Make sure we're connected
-        while not await self._reconnect():
-            pass
-
+        await self._reconnect()
         yield _events.Connect()
 
         while True:
@@ -374,7 +345,6 @@ class Listener:
             rc = self._mqtt.loop_misc()
 
             # The sequence ID was reset in _handle_ms
-            # TODO: Signal to the user that they should reload their data!
             if self._sequence_id is None:
                 self._sequence_id = await fetch_sequence_id(self.session)
                 self._messenger_queue_publish()
@@ -398,12 +368,9 @@ class Listener:
                 else:
                     err = paho.mqtt.client.error_string(rc)
                     log.error("MQTT Error: %s", err)
-                    reason = "MQTT Error: {}, retrying".format(err)
-                    yield _events.Disconnect(reason=reason)
+                    yield _events.Disconnect(reason=f"MQTT Error: {err}, retrying")
 
-                while not await self._reconnect():
-                    pass
-
+                await self._reconnect()
                 yield _events.Connect()
 
             while True:
@@ -411,6 +378,11 @@ class Listener:
                     yield self._message_queue.get_nowait()
                 except asyncio.QueueEmpty:
                     break
+        if self._disconnect_error:
+            log.info("disconnect_error is set, raising and clearing variable")
+            err = self._disconnect_error
+            self._disconnect_error = None
+            raise err
 
     def disconnect(self) -> None:
         """Disconnect the MQTT listener.

@@ -24,6 +24,7 @@ from ._exception import (
     GraphQLError,
     InvalidParameters,
     NotLoggedIn,
+    NotConnected,
     PleaseRefresh,
 )
 from ._session import Session
@@ -120,7 +121,7 @@ from ._listen import Listener
 
 from ._client import Client
 
-__version__ = "0.5.1"
+__version__ = "0.6.0b1"
 
 
 from . import _fix_module_metadata
