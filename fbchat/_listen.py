@@ -333,6 +333,7 @@ class Listener:
 
         await self._reconnect()
         yield _events.Connect()
+        exit_if_not_connected = False
 
         while True:
             try:
@@ -365,13 +366,20 @@ class Listener:
                     yield _events.Disconnect(reason="Connection error, retrying")
                 elif rc == paho.mqtt.client.MQTT_ERR_CONN_REFUSED:
                     raise _exception.NotLoggedIn("MQTT connection refused")
+                elif rc == paho.mqtt.client.MQTT_ERR_NO_CONN:
+                    if exit_if_not_connected:
+                        raise _exception.NotConnected("MQTT error: no connection")
+                    yield _events.Disconnect(reason="MQTT Error: no connection, retrying")
                 else:
                     err = paho.mqtt.client.error_string(rc)
                     log.error("MQTT Error: %s", err)
                     yield _events.Disconnect(reason=f"MQTT Error: {err}, retrying")
 
                 await self._reconnect()
+                exit_if_not_connected = True
                 yield _events.Connect()
+            else:
+                exit_if_not_connected = False
 
             while True:
                 try:
