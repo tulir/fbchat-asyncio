@@ -16,8 +16,7 @@ from . import _graphql, _util, _exception
 
 from typing import Optional, Mapping, Callable, Any, Awaitable
 
-
-SERVER_JS_DEFINE_REGEX = re.compile(r'\(require\("ServerJS"\)\)\(\).handle\(')
+SERVER_JS_DEFINE_REGEX = re.compile(r'\(new ServerJS\(\)\).handle\(')
 SERVER_JS_DEFINE_JSON_DECODER = json.JSONDecoder()
 
 
