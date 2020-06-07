@@ -20,7 +20,11 @@ from . import _graphql, _util, _exception
 
 from typing import Optional, Mapping, Callable, Any, Awaitable
 
-SERVER_JS_DEFINE_REGEX = re.compile(r'\(new ServerJS\(\)\).handle\(')
+SERVER_JS_DEFINE_REGEX = re.compile(r'(?:'
+                                    r'\(new ServerJS\(\)\)'
+                                    r'|\(require\("ServerJS"\)\)\(\)'
+                                    r'|\(new ServerJS\(\)\);s'
+                                    r').handle\(')
 SERVER_JS_DEFINE_JSON_DECODER = json.JSONDecoder()
 
 
@@ -32,7 +36,7 @@ def write_html_to_temp(html: str) -> str:
     except OSError as exc:
         if exc.errno != errno.EEXIST:
             raise
-    with open(file_path) as file:
+    with open(file_path, "w") as file:
         file.write(html)
     return file_path
 
@@ -50,7 +54,7 @@ def parse_server_js_define(html: str) -> Mapping[str, Any]:
     if not define_splits:
         file_name = write_html_to_temp(html)
         raise _exception.ParseError("Could not find any ServerJSDefine", data_file=file_name)
-    if len(define_splits) > 1:
+    if len(define_splits) > 2:
         file_name = write_html_to_temp(html)
         raise _exception.ParseError("Found too many ServerJSDefine", data_file=file_name)
     try:
