@@ -4,6 +4,10 @@ import aiohttp
 import random
 import re
 import json
+import os
+import time
+import errno
+import string
 from yarl import URL
 from http.cookies import SimpleCookie, BaseCookie
 
@@ -20,6 +24,19 @@ SERVER_JS_DEFINE_REGEX = re.compile(r'\(new ServerJS\(\)\).handle\(')
 SERVER_JS_DEFINE_JSON_DECODER = json.JSONDecoder()
 
 
+def write_html_to_temp(html: str) -> str:
+    random_id = "".join(random.choices(string.ascii_lowercase + string.digits, k=6))
+    file_path = f"/tmp/fbchat-debug/serverjsdefine-{int(time.time())}-{random_id}"
+    try:
+        os.makedirs(os.path.dirname(file_path))
+    except OSError as exc:
+        if exc.errno != errno.EEXIST:
+            raise
+    with open(file_path) as file:
+        file.write(html)
+    return file_path
+
+
 def parse_server_js_define(html: str) -> Mapping[str, Any]:
     """Parse ``ServerJSDefine`` entries from a HTML document."""
     # Find points where we should start parsing
@@ -31,20 +48,25 @@ def parse_server_js_define(html: str) -> Mapping[str, Any]:
     _, *define_splits = define_splits
 
     if not define_splits:
-        raise _exception.ParseError("Could not find any ServerJSDefine", data=html)
+        file_name = write_html_to_temp(html)
+        raise _exception.ParseError("Could not find any ServerJSDefine", data_file=file_name)
     if len(define_splits) > 1:
-        raise _exception.ParseError("Found too many ServerJSDefine", data=define_splits)
+        file_name = write_html_to_temp(html)
+        raise _exception.ParseError("Found too many ServerJSDefine", data_file=file_name)
     try:
         parsed, _ = SERVER_JS_DEFINE_JSON_DECODER.raw_decode(define_splits[0], idx=0)
     except json.JSONDecodeError as e:
-        raise _exception.ParseError("Invalid ServerJSDefine", data=define_splits[0]) from e
+        file_name = write_html_to_temp(html)
+        raise _exception.ParseError("Invalid ServerJSDefine: not json", data_file=file_name) from e
     try:
         rtn = parsed["define"]
     except KeyError:
-        raise _exception.ParseError("Invalid ServerJSDefine", data=parsed)
+        file_name = write_html_to_temp(html)
+        raise _exception.ParseError("Invalid ServerJSDefine: missing define key", data_file=file_name)
 
     if not isinstance(rtn, list):
-        raise _exception.ParseError("Invalid ServerJSDefine", data=rtn)
+        file_name = write_html_to_temp(html)
+        raise _exception.ParseError("Invalid ServerJSDefine: define value is not a list", data_file=file_name)
 
     # Convert to a dict
     return _util.get_jsmods_define(rtn)

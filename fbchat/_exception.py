@@ -36,15 +36,10 @@ class ParseError(FacebookError):
     This may contain sensitive data, so should not be logged to file.
     """
 
-    data: Any
-    """The data that triggered the error.
-
-    The format of this cannot be relied on, it's only for debugging purposes.
-    """
+    data_file: str
 
     def __str__(self):
-        msg = "{}. Please report this, along with the data below!\n{}"
-        return msg.format(self.message, self.data)
+        return f"{self.message}. Please report this, along with the data in {self.data_file}"
 
 
 @attr.s(slots=True, auto_exc=True, auto_attribs=True)
