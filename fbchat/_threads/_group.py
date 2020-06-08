@@ -190,7 +190,7 @@ class GroupData(Group):
     #: Set `Plan`
     plan: Optional[_models.PlanData] = None
     #: The group thread's participant user ids
-    participants: Set[str] = attr.ib(factory=set)
+    participants: Set[ThreadABC] = attr.ib(factory=set)
     #: A dictionary, containing user nicknames mapped to their IDs
     nicknames: Mapping[str, str] = attr.ib(factory=dict)
     #: The groups's message color

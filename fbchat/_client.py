@@ -290,7 +290,10 @@ class Client:
             >>> user.name
             "Mark Zuckerberg"
         """
-        ids = list(ids)
+        if isinstance(ids, str):
+            ids = [ids]
+        else:
+            ids = list(ids)
         queries = []
         for thread_id in ids:
             params = {
