@@ -36,10 +36,16 @@ class ParseError(FacebookError):
     This may contain sensitive data, so should not be logged to file.
     """
 
-    data_file: str
+    data_file: str = ""
+    data: Any = None
 
     def __str__(self):
-        return f"{self.message}. Please report this, along with the data in {self.data_file}"
+        if self.data:
+            return f"{self.message}. Please report this, along with the data below:\n{self.data}"
+        elif self.data_file:
+            return f"{self.message}. Please report this, along with the data in {self.data_file}"
+        else:
+            return self.message
 
 
 @attr.s(slots=True, auto_exc=True, auto_attribs=True)
@@ -125,11 +131,11 @@ def handle_graphql_errors(j):
         errors = j["errors"]
     if errors:
         error = errors[0]  # TODO: Handle multiple errors
-        # TODO: Use `severity` and `description`
+        # TODO: Use `severity`
         raise GraphQLError(
             # TODO: What data is always available?
             message=error.get("summary", "Unknown error"),
-            description=error.get("message", ""),
+            description=error.get("message") or error.get("description") or "",
             code=error.get("code"),
             debug_info=error.get("debug_info"),
         )

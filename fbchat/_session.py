@@ -174,6 +174,9 @@ async def two_factor_helper(session: aiohttp.ClientSession, r: aiohttp.ClientRes
         log.info("Saving browser")
         r = await session.post(url, data=data, allow_redirects=False)
         log.debug("2FA location: %s", r.headers.get("Location"))
+        url = r.headers.get("Location")
+        if url and url.startswith("https://www.messenger.com/login/auth_token/"):
+            return url
         url, data = find_form_request(await r.text())
 
     log.info("Starting Facebook checkup flow")
@@ -181,6 +184,10 @@ async def two_factor_helper(session: aiohttp.ClientSession, r: aiohttp.ClientRes
     log.debug("2FA location: %s", r.headers.get("Location"))
 
     url, data = find_form_request(await r.text())
+    if "verification_method" in data:
+        raise _exception.NotLoggedIn(
+            "Your account is locked, and you need to log in using a browser, and verify it there!"
+        )
     if "submit[This was me]" not in data or "submit[This wasn't me]" not in data:
         raise _exception.ParseError("Could not fill out form properly (2)", data=data)
     data["submit[This was me]"] = "[any value]"
@@ -268,7 +275,9 @@ class Session:
             on_2fa_callback: Function that will be called, in case a two factor
                 authentication code is needed. This should return the requested code.
 
-                Only tested using SMS, might not work with authentication applications.
+                Tested using SMS and authentication applications. If you have both
+                enabled, you might not receive an SMS code, and you'll have to use the
+                authentication application.
 
                 Note: Facebook limits the amount of codes they will give you, so if you
                 don't receive a code, be patient, and try again later!
