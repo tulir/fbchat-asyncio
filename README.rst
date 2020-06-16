@@ -1,32 +1,21 @@
 ``fbchat`` - Facebook Messenger for Python
 ==========================================
 
-.. image:: https://badgen.net/pypi/v/fbchat
-    :target: https://pypi.python.org/pypi/fbchat
+.. image:: https://badgen.net/pypi/v/fbchat-asyncio
+    :target: https://pypi.python.org/pypi/fbchat-asyncio
     :alt: Project version
 
-.. image:: https://badgen.net/badge/python/3.5,3.6,3.7,3.8,pypy?list=|
+.. image:: https://badgen.net/badge/python/3.6,3.7,3.8?list=|
     :target: https://pypi.python.org/pypi/fbchat
-    :alt: Supported python versions: 3.5, 3.6, 3.7, 3.8 and pypy
+    :alt: Supported python versions: 3.6, 3.7 and 3.8
 
-.. image:: https://badgen.net/pypi/license/fbchat
-    :target: https://github.com/carpedm20/fbchat/tree/master/LICENSE
+.. image:: https://badgen.net/pypi/license/fbchat-asyncio
+    :target: https://github.com/tulir/fbchat-asyncio/tree/master/LICENSE
     :alt: License: BSD 3-Clause
-
-.. image:: https://readthedocs.org/projects/fbchat/badge/?version=stable
-    :target: https://fbchat.readthedocs.io
-    :alt: Documentation
-
-.. image:: https://badgen.net/travis/carpedm20/fbchat
-    :target: https://travis-ci.org/carpedm20/fbchat
-    :alt: Travis CI
-
-.. image:: https://badgen.net/badge/code%20style/black/black
-    :target: https://github.com/ambv/black
-    :alt: Code style
 
 A powerful and efficient library to interact with
 `Facebook's Messenger <https://www.facebook.com/messages/>`__, using just your email and password.
+This is an asyncio fork of the `fbchat <https://github.com/carpedm20/fbchat>`__ library.
 
 This is *not* an official API, Facebook has that `over here <https://developers.facebook.com/docs/messenger-platform>`__ for chat bots. This library differs by using a normal Facebook account instead.
 
