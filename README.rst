@@ -9,7 +9,7 @@
     :target: https://pypi.python.org/pypi/fbchat
     :alt: Supported python versions: 3.6, 3.7 and 3.8
 
-.. image:: https://badgen.net/pypi/license/fbchat-asyncio
+.. image:: https://badgen.net/pypi/license/fbchat
     :target: https://github.com/tulir/fbchat-asyncio/tree/master/LICENSE
     :alt: License: BSD 3-Clause
 
