@@ -21,10 +21,9 @@ from . import _graphql, _util, _exception
 from typing import Optional, Mapping, Callable, Any, Awaitable
 
 SERVER_JS_DEFINE_REGEX = re.compile(r'(?:'
-                                    r'\(new ServerJS\(\)\)'
-                                    r'|\(require\("ServerJS"\)\)\(\)'
-                                    r'|\(new ServerJS\(\)\);s'
-                                    r').handle\(')
+                                    r'\(new ServerJS\(\)\)(?:;s)?'
+                                    r'|\(require\("ServerJS(?:Define)?"\)\)\(\)'
+                                    r').handle(?:Defines)?\(')
 SERVER_JS_DEFINE_JSON_DECODER = json.JSONDecoder()
 
 
@@ -127,6 +126,10 @@ def session_factory() -> aiohttp.ClientSession:
     return session
 
 
+def login_cookies(at: datetime.datetime):
+    return {"act": "{}/0".format(_util.datetime_to_millis(at))}
+
+
 def client_id_factory() -> str:
     return hex(int(random.random() * 2 ** 31))[2:]
 
@@ -164,7 +167,8 @@ async def two_factor_helper(session: aiohttp.ClientSession, r: aiohttp.ClientRes
     while "approvals_code" in data:
         data["approvals_code"] = await on_2fa_callback()
         log.info("Submitting 2FA code")
-        r = await session.post(url, data=data, allow_redirects=False)
+        r = await session.post(url, data=data, allow_redirects=False,
+                               cookies=login_cookies(_util.now()))
         log.debug("2FA location: %s", r.headers.get("Location"))
         url, data = find_form_request(await r.text())
 
@@ -172,7 +176,8 @@ async def two_factor_helper(session: aiohttp.ClientSession, r: aiohttp.ClientRes
     if "name_action_selected" in data:
         data["name_action_selected"] = "save_device"
         log.info("Saving browser")
-        r = await session.post(url, data=data, allow_redirects=False)
+        r = await session.post(url, data=data, allow_redirects=False,
+                               cookies=login_cookies(_util.now()))
         log.debug("2FA location: %s", r.headers.get("Location"))
         url = r.headers.get("Location")
         if url and url.startswith("https://www.messenger.com/login/auth_token/"):
@@ -180,7 +185,8 @@ async def two_factor_helper(session: aiohttp.ClientSession, r: aiohttp.ClientRes
         url, data = find_form_request(await r.text())
 
     log.info("Starting Facebook checkup flow")
-    r = await session.post(url, data=data, allow_redirects=False)
+    r = await session.post(url, data=data, allow_redirects=False,
+                           cookies=login_cookies(_util.now()))
     log.debug("2FA location: %s", r.headers.get("Location"))
 
     url, data = find_form_request(await r.text())
@@ -194,7 +200,8 @@ async def two_factor_helper(session: aiohttp.ClientSession, r: aiohttp.ClientRes
     del data["submit[This wasn't me]"]
     log.info("Verifying login attempt")
 
-    r = await session.post(url, data=data, allow_redirects=False)
+    r = await session.post(url, data=data, allow_redirects=False,
+                           cookies=login_cookies(_util.now()))
     log.debug("2FA location: %s", r.headers.get("Location"))
 
     url, data = find_form_request(await r.text())
@@ -203,7 +210,8 @@ async def two_factor_helper(session: aiohttp.ClientSession, r: aiohttp.ClientRes
     data["name_action_selected"] = "save_device"
     log.info("Saving device again")
 
-    r = await session.post(url, data=data, allow_redirects=False)
+    r = await session.post(url, data=data, allow_redirects=False,
+                           cookies=login_cookies(_util.now()))
     log.debug("2FA location: %s", r.headers.get("Location"))
     return r.headers.get("Location")
 
@@ -320,6 +328,7 @@ class Session:
                 "https://www.messenger.com/login/password/",
                 data=data,
                 allow_redirects=False,
+                cookies=login_cookies(_util.now()),
             )
         except aiohttp.ClientError as e:
             _exception.handle_requests_error(e)
@@ -344,18 +353,18 @@ class Session:
             if not url.startswith("https://www.facebook.com/checkpoint/start/"):
                 raise _exception.ParseError("Failed 2fa flow (1)", data=url)
 
-            r = await session.get(url, allow_redirects=False)
+            r = await session.get(url, allow_redirects=False, cookies=login_cookies(_util.now()))
             url = r.headers.get("Location")
             if not url or not url.startswith("https://www.facebook.com/checkpoint/"):
                 raise _exception.ParseError("Failed 2fa flow (2)", data=url)
 
-            r = await session.get(url, allow_redirects=False)
+            r = await session.get(url, allow_redirects=False, cookies=login_cookies(_util.now()))
             url = await two_factor_helper(session, r, on_2fa_callback)
 
             if not url.startswith("https://www.messenger.com/login/auth_token/"):
                 raise _exception.ParseError("Failed 2fa flow (3)", data=url)
 
-            r = await session.get(url, allow_redirects=False)
+            r = await session.get(url, allow_redirects=False, cookies=login_cookies(_util.now()))
             url = r.headers.get("Location")
 
         if url != "https://www.messenger.com/":
@@ -531,7 +540,7 @@ class Session:
         return await self._post("/api/graphqlbatch/", data, as_graphql=True)
 
     async def _do_send_request(self, data):
-        now = datetime.datetime.utcnow()
+        now = _util.now()
         offline_threading_id = _util.generate_offline_threading_id()
         data["client"] = "mercury"
         data["author"] = "fbid:{}".format(self._user_id)
