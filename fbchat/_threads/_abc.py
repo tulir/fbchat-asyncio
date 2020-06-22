@@ -205,7 +205,7 @@ class ThreadABC(metaclass=abc.ABCMeta):
 
             >>> thread.send_location(51.5287718, -0.2416815)
         """
-        await self._send_location(True, latitude=latitude, longitude=longitude)
+        return await self._send_location(True, latitude=latitude, longitude=longitude)
 
     async def send_pinned_location(self, latitude: float, longitude: float):
         """Send a given location to a thread as a pinned location.
@@ -219,7 +219,7 @@ class ThreadABC(metaclass=abc.ABCMeta):
 
             >>> thread.send_pinned_location(39.9390731, 116.117273)
         """
-        await self._send_location(False, latitude=latitude, longitude=longitude)
+        return await self._send_location(False, latitude=latitude, longitude=longitude)
 
     async def send_files(self, files: Iterable[Tuple[str, str]]):
         """Send files from file IDs to a thread.
