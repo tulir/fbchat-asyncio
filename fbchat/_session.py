@@ -65,11 +65,13 @@ def parse_server_js_define(html: str) -> Mapping[str, Any]:
         rtn = parsed["define"]
     except KeyError:
         file_name = write_html_to_temp(html)
-        raise _exception.ParseError("Invalid ServerJSDefine: missing define key", data_file=file_name)
+        raise _exception.ParseError("Invalid ServerJSDefine: missing define key",
+                                    data_file=file_name)
 
     if not isinstance(rtn, list):
         file_name = write_html_to_temp(html)
-        raise _exception.ParseError("Invalid ServerJSDefine: define value is not a list", data_file=file_name)
+        raise _exception.ParseError("Invalid ServerJSDefine: define value is not a list",
+                                    data_file=file_name)
 
     # Convert to a dict
     return _util.get_jsmods_define(rtn)
@@ -113,17 +115,12 @@ def get_user_id(session: aiohttp.ClientSession) -> str:
     return rtn if isinstance(rtn, str) else str(rtn.value)
 
 
-def session_factory() -> aiohttp.ClientSession:
+def session_factory(user_agent: Optional[str] = None) -> aiohttp.ClientSession:
     from . import __version__
-
-    session = aiohttp.ClientSession(headers={
+    return aiohttp.ClientSession(headers={
         "Referer": "https://www.messenger.com/",
-        # We won't try to set a fake user agent to mask our presence!
-        # Facebook allows us access anyhow, and it makes our motives clearer:
-        # We're not trying to cheat Facebook, we simply want to access their service
-        "User-Agent": "fbchat-asyncio/{}".format(__version__)
+        "User-Agent": user_agent or f"fbchat-asyncio/{__version__}",
     })
-    return session
 
 
 def login_cookies(at: datetime.datetime):
@@ -272,9 +269,9 @@ class Session:
 
     # TODO: Add ability to load previous cookies in here, to avoid 2fa flow
     @classmethod
-    async def login(
-        cls, email: str, password: str, on_2fa_callback: Callable[[], Awaitable[int]] = None
-    ):
+    async def login(cls, email: str, password: str,
+                    on_2fa_callback: Callable[[], Awaitable[int]] = None,
+                    user_agent: Optional[str] = None) -> 'Session':
         """Login the user, using ``email`` and ``password``.
 
         Args:
@@ -289,6 +286,7 @@ class Session:
 
                 Note: Facebook limits the amount of codes they will give you, so if you
                 don't receive a code, be patient, and try again later!
+            user_agent: The user agent to send to Facebook
 
         Example:
             >>> import fbchat
@@ -304,7 +302,7 @@ class Session:
             >>> session.user.id
             "1234"
         """
-        session = session_factory()
+        session = session_factory(user_agent=user_agent)
 
         data = {
             # "jazoest": "2754",
@@ -420,7 +418,7 @@ class Session:
             )
 
     @classmethod
-    async def _from_session(cls, session):
+    async def _from_session(cls, session: aiohttp.ClientSession) -> Optional['Session']:
         # TODO: Automatically set user_id when the cookie changes in the session
         user_id = get_user_id(session)
 
@@ -463,7 +461,8 @@ class Session:
         return {key: morsel.value for key, morsel in cookie.items()}
 
     @classmethod
-    async def from_cookies(cls, cookies: Mapping[str, str]):
+    async def from_cookies(cls, cookies: Mapping[str, str], user_agent: Optional[str] = None
+                           ) -> 'Session':
         """Load a session from session cookies.
 
         Args:
@@ -474,7 +473,7 @@ class Session:
             >>> # Store cookies somewhere, and then subsequently
             >>> session = fbchat.Session.from_cookies(cookies)
         """
-        session = session_factory()
+        session = session_factory(user_agent=user_agent)
 
         if isinstance(cookies, BaseCookie):
             cookie = cookies
