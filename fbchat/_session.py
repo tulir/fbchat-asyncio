@@ -115,9 +115,18 @@ def get_user_id(session: aiohttp.ClientSession) -> str:
     return rtn if isinstance(rtn, str) else str(rtn.value)
 
 
+class ProxyClientSession(aiohttp.ClientSession):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._proxy = os.environ.get("HTTP_PROXY")
+
+    def _request(self, *args, **kwargs) -> Awaitable[aiohttp.ClientResponse]:
+        return super()._request(*args, **kwargs, proxy=self._proxy)
+
+
 def session_factory(user_agent: Optional[str] = None) -> aiohttp.ClientSession:
     from . import __version__
-    return aiohttp.ClientSession(headers={
+    return ProxyClientSession(headers={
         "Referer": "https://www.messenger.com/",
         "User-Agent": user_agent or f"fbchat-asyncio/{__version__}",
     })
