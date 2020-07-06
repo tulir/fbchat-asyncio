@@ -7,7 +7,7 @@ except IOError:
 
 setuptools.setup(
     name="fbchat-asyncio",
-    version="0.6.8",
+    version="0.6.9",
     url="https://github.com/tulir/fbchat-asyncio",
 
     author="Tulir Asokan",
@@ -25,6 +25,9 @@ setuptools.setup(
         "yarl",
         "paho-mqtt~=1.5",
     ],
+    extras_require={
+        "proxy": ["aiohttp-socks", "pysocks"],
+    },
 
     python_requires="~=3.6",
 

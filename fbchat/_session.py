@@ -20,6 +20,12 @@ from . import _graphql, _util, _exception
 
 from typing import Optional, Mapping, Callable, Any, Awaitable
 
+try:
+    from aiohttp_socks import ProxyType, ProxyConnector
+except ImportError:
+    ProxyType = None
+    ProxyConnector = None
+
 SERVER_JS_DEFINE_REGEX = re.compile(r'(?:'
                                     r'\(new ServerJS\(\)\)(?:;s)?'
                                     r'|\(require\("ServerJS(?:Define)?"\)\)\(\)'
@@ -115,21 +121,15 @@ def get_user_id(session: aiohttp.ClientSession) -> str:
     return rtn if isinstance(rtn, str) else str(rtn.value)
 
 
-class ProxyClientSession(aiohttp.ClientSession):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._proxy = os.environ.get("HTTP_PROXY")
-
-    def _request(self, *args, **kwargs) -> Awaitable[aiohttp.ClientResponse]:
-        return super()._request(*args, **kwargs, proxy=self._proxy)
-
-
 def session_factory(user_agent: Optional[str] = None) -> aiohttp.ClientSession:
     from . import __version__
-    return ProxyClientSession(headers={
-        "Referer": "https://www.messenger.com/",
-        "User-Agent": user_agent or f"fbchat-asyncio/{__version__}",
-    })
+    return aiohttp.ClientSession(connector=(ProxyConnector.from_url(os.environ["HTTP_PROXY"])
+                                            if ProxyConnector and "HTTP_PROXY" in os.environ
+                                            else None),
+                                 headers={
+                                     "Referer": "https://www.messenger.com/",
+                                     "User-Agent": user_agent or f"fbchat-asyncio/{__version__}",
+                                 })
 
 
 def login_cookies(at: datetime.datetime):

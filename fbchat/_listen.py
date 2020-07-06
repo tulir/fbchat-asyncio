@@ -78,7 +78,13 @@ def mqtt_factory() -> paho.mqtt.client.Client:
     )
     if "HTTP_PROXY" in os.environ and socks and URL:
         proxy_url = URL(os.environ["HTTP_PROXY"])
-        mqtt.proxy_set(proxy_type=socks.HTTP, proxy_addr=f"{proxy_url.host}:${proxy_url.port}",
+        proxy_type = {
+            "http": socks.HTTP,
+            "https": socks.HTTP,
+            "socks5": socks.SOCKS5,
+            "socks4": socks.SOCKS4,
+        }[proxy_url.scheme]
+        mqtt.proxy_set(proxy_type=proxy_type, proxy_addr=f"{proxy_url.host}:${proxy_url.port}",
                        proxy_username=proxy_url.user, proxy_password=proxy_url.password)
     mqtt.enable_logger()
     # mqtt.max_inflight_messages_set(20)  # The rest will get queued
