@@ -2,6 +2,7 @@ import os
 import attr
 import random
 import paho.mqtt.client
+import urllib.request
 import asyncio
 import aiohttp
 from ._common import log, kw_only
@@ -15,7 +16,6 @@ try:
 except ImportError:
     socks = None
     URL = None
-
 
 HOST = "edge-chat.messenger.com"
 
@@ -76,15 +76,20 @@ def mqtt_factory() -> paho.mqtt.client.Client:
         protocol=paho.mqtt.client.MQTTv31,
         transport="websockets",
     )
-    if "HTTP_PROXY" in os.environ and socks and URL:
-        proxy_url = URL(os.environ["HTTP_PROXY"])
+    try:
+        http_proxy = urllib.request.getproxies()["http"]
+    except KeyError:
+        http_proxy = None
+    if http_proxy and socks and URL:
+        proxy_url = URL(http_proxy)
         proxy_type = {
             "http": socks.HTTP,
             "https": socks.HTTP,
+            "socks": socks.SOCKS5,
             "socks5": socks.SOCKS5,
             "socks4": socks.SOCKS4,
         }[proxy_url.scheme]
-        mqtt.proxy_set(proxy_type=proxy_type, proxy_addr=f"{proxy_url.host}:${proxy_url.port}",
+        mqtt.proxy_set(proxy_type=proxy_type, proxy_addr=proxy_url.host, proxy_port=proxy_url.port,
                        proxy_username=proxy_url.user, proxy_password=proxy_url.password)
     mqtt.enable_logger()
     # mqtt.max_inflight_messages_set(20)  # The rest will get queued

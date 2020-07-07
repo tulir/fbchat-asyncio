@@ -8,6 +8,7 @@ import os
 import time
 import errno
 import string
+import urllib.request
 from yarl import URL
 from http.cookies import SimpleCookie, BaseCookie
 
@@ -123,8 +124,12 @@ def get_user_id(session: aiohttp.ClientSession) -> str:
 
 def session_factory(user_agent: Optional[str] = None) -> aiohttp.ClientSession:
     from . import __version__
-    return aiohttp.ClientSession(connector=(ProxyConnector.from_url(os.environ["HTTP_PROXY"])
-                                            if ProxyConnector and "HTTP_PROXY" in os.environ
+    try:
+        http_proxy = urllib.request.getproxies()["http"]
+    except KeyError:
+        http_proxy = None
+    return aiohttp.ClientSession(connector=(ProxyConnector.from_url(http_proxy)
+                                            if ProxyConnector and http_proxy
                                             else None),
                                  headers={
                                      "Referer": "https://www.messenger.com/",
