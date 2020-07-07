@@ -164,7 +164,7 @@ class Message:
             >>> message.text
             "The message text"
         """
-        message_info = await self.thread._forced_fetch(self.id).get("message")
+        message_info = (await self.thread._forced_fetch(self.id)).get("message")
         return MessageData._from_graphql(self.thread, message_info)
 
     @staticmethod
