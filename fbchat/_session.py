@@ -242,6 +242,8 @@ def get_fb_dtsg(define) -> Optional[str]:
         return define["DTSGInitData"]["token"]
     elif "DTSGInitialData" in define:
         return define["DTSGInitialData"]["token"]
+    elif "MRequestConfig" in define and "dtsg" in define["MRequestConfig"]:
+        return define["MRequestConfig"]["dtsg"]["token"]
     return None
 
 
