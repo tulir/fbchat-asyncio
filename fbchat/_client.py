@@ -360,7 +360,7 @@ class Client:
         if before is None and self.sequence_id_callback is not None:
             try:
                 seq_id = int(j["viewer"]["message_threads"]["sync_sequence_id"])
-            except (KeyError, ValueError):
+            except (KeyError, ValueError, TypeError):
                 log.warning("Didn't get sequence ID from fetch_threads request")
             else:
                 log.debug("Calling back with sequence ID from fetch_threads")

@@ -19,7 +19,7 @@ import bs4
 from ._common import log, kw_only
 from . import _graphql, _util, _exception
 
-from typing import Optional, Mapping, Callable, Any, Awaitable
+from typing import Optional, Mapping, Callable, Any, Awaitable, Dict, List, NamedTuple
 
 try:
     from aiohttp_socks import ProxyType, ProxyConnector
@@ -30,7 +30,8 @@ except ImportError:
 SERVER_JS_DEFINE_REGEX = re.compile(r'(?:'
                                     r'\(new ServerJS\(\)\)(?:;s)?'
                                     r'|\(require\("ServerJS(?:Define)?"\)\)\(\)'
-                                    r').handle(?:Defines)?\(')
+                                    r').handle(?:Defines|WithCustomApplyEach)?\('
+                                    r'(?:ScheduledApplyEach,)?')
 SERVER_JS_DEFINE_JSON_DECODER = json.JSONDecoder()
 
 
@@ -60,9 +61,9 @@ def parse_server_js_define(html: str) -> Mapping[str, Any]:
     if not define_splits:
         file_name = write_html_to_temp(html)
         raise _exception.ParseError("Could not find any ServerJSDefine", data_file=file_name)
-    if len(define_splits) > 2:
-        file_name = write_html_to_temp(html)
-        raise _exception.ParseError("Found too many ServerJSDefine", data_file=file_name)
+    # if len(define_splits) > 2:
+    #     file_name = write_html_to_temp(html)
+    #     raise _exception.ParseError("Found too many ServerJSDefine", data_file=file_name)
     try:
         parsed, _ = SERVER_JS_DEFINE_JSON_DECODER.raw_decode(define_splits[0], idx=0)
     except json.JSONDecodeError as e:
@@ -82,6 +83,52 @@ def parse_server_js_define(html: str) -> Mapping[str, Any]:
 
     # Convert to a dict
     return _util.get_jsmods_define(rtn)
+
+
+def parse_kv(vals: List[str]) -> Dict[str, str]:
+    kv = {}
+    for val in vals:
+        split = val.strip().split("=", 1)
+        if len(split) == 1:
+            kv[split[0]] = True
+        else:
+            kv[split[0]] = split[1]
+    return kv
+
+
+class AltSvc(NamedTuple):
+    alt_authority: str
+    max_age: int
+    persist: bool
+    extra_meta: Dict[str, str]
+
+
+def parse_alt_svc(r: aiohttp.ClientResponse) -> Dict[str, AltSvc]:
+    try:
+        header = r.headers["Alt-Svc"]
+    except KeyError:
+        return {}
+    if header.lower() == "clear":
+        return {}
+    services = {}
+    for service in header.split(","):
+        vals = service.split(";")
+        try:
+            protocol_id, alt_authority = vals[0].split("=")
+        except ValueError:
+            continue
+        alt_authority: str = alt_authority.strip('"')
+        kv = parse_kv(vals[1:])
+        try:
+            max_age = int(kv.pop("max_age"))
+        except (KeyError, ValueError):
+            max_age = 86400
+        try:
+            persist = kv.pop("persist") == "1"
+        except KeyError:
+            persist = False
+        services[protocol_id] = AltSvc(alt_authority, max_age, persist, extra_meta=kv)
+    return services
 
 
 def base36encode(number: int) -> str:
@@ -241,10 +288,10 @@ def get_fb_dtsg(define) -> Optional[str]:
     return None
 
 
-def prefix_url(domain: str, path: str) -> str:
+def prefix_url(domain: str, path: str) -> URL:
     if path.startswith("/"):
-        return f"https://www.{domain}" + path
-    return path
+        return URL(f"https://www.{domain}" + path)
+    return URL(path)
 
 
 @attr.s(slots=True, kw_only=kw_only, repr=False, eq=False, auto_attribs=True)
@@ -258,11 +305,12 @@ class Session:
     _fb_dtsg: str
     _revision: int
     domain: str
+    _onion: Optional[str] = None
     _session: aiohttp.ClientSession = attr.ib(factory=session_factory)
     _counter: int = 0
     _client_id: str = attr.ib(factory=client_id_factory)
 
-    def _prefix_url(self, path: str) -> str:
+    def _prefix_url(self, path: str) -> URL:
         return prefix_url(self.domain, path)
 
     @property
@@ -440,19 +488,26 @@ class Session:
             )
 
     @classmethod
-    async def _from_session(cls, session: aiohttp.ClientSession, domain: str) -> Optional['Session']:
+    async def _from_session(cls, session: aiohttp.ClientSession, domain: str
+                            ) -> Optional['Session']:
         # TODO: Automatically set user_id when the cookie changes in the session
         user_id = get_user_id(domain, session)
 
         # Make a request to the main page to retrieve ServerJSDefine entries
         try:
-            r = await session.get(prefix_url(domain, "/"), allow_redirects=False)
+            r = await session.get(prefix_url(domain, "/"), allow_redirects=False, headers={
+                "Accept": "text/html",
+            })
         except aiohttp.ClientError as e:
             _exception.handle_requests_error(e)
             raise Exception("handle_requests_error did not raise exception")
         _exception.handle_http_error(r.status)
 
-        define = parse_server_js_define(await r.text())
+        html = await r.text()
+        if len(html) == 0:
+            raise _exception.FacebookError("Got empty response when trying to check login")
+
+        define = parse_server_js_define(html)
 
         fb_dtsg = get_fb_dtsg(define)
         if fb_dtsg is None:
@@ -462,14 +517,19 @@ class Session:
             raise _exception.NotLoggedIn(
                 "Found empty fb_dtsg, the session was probably invalid."
             )
-
         try:
             revision = int(define["SiteData"]["client_revision"])
         except TypeError:
             raise _exception.ParseError("Could not find client revision", data=define)
+        onion = None
+        alt_svc_data = parse_alt_svc(r)
+        if "h2" in alt_svc_data and alt_svc_data["h2"].alt_authority.endswith(".onion:443"):
+            # TODO remember expiry too?
+            onion = alt_svc_data["h2"].alt_authority
+            log.info("Got onion alt-svc %s", onion)
 
         return cls(user_id=user_id, fb_dtsg=fb_dtsg, revision=revision, session=session,
-                   domain=domain)
+                   domain=domain, onion=onion)
 
     def get_cookies(self) -> Optional[Mapping[str, str]]:
         """Retrieve session cookies, that can later be used in `from_cookies`.
@@ -518,8 +578,17 @@ class Session:
             for key, (name, file, content_type) in files.items():
                 payload.add_field(key, file, filename=name, content_type=content_type)
             data = payload
+        real_url = self._prefix_url(url)
+        kwargs = {}
+        if self._onion:
+            # TODO is there some way to change the host aiohttp connects to without changing the
+            #      domain it uses for TLS, cookies and the Host header?
+            kwargs["ssl"] = False
+            kwargs["headers"] = {"Host": real_url.host}
+            kwargs["cookies"] = self._session.cookie_jar.filter_cookies(real_url)
+            real_url = real_url.with_host(real_url.host.replace(self.domain, self._onion))
         try:
-            r = await self._session.post(self._prefix_url(url), data=data)
+            r = await self._session.post(real_url, data=data, **kwargs)
         except aiohttp.ClientError as e:
             _exception.handle_requests_error(e)
             raise Exception("handle_requests_error did not raise exception")
