@@ -1,13 +1,15 @@
-import attr
+from typing import Callable, Optional
 import datetime
 
-from ._common import log, attrs_default
+import attr
+
+from ._common import log, kw_only
 from . import _exception, _util, _graphql, _session, _threads, _models
 
 from typing import Sequence, Iterable, Tuple, Optional, Set, BinaryIO, AsyncIterator
 
 
-@attrs_default
+@attr.s(slots=True, kw_only=kw_only, auto_attribs=True)
 class Client:
     """A client for Facebook Messenger.
 
@@ -21,6 +23,7 @@ class Client:
 
     #: The session to use when making requests.
     session: _session.Session
+    sequence_id_callback: Optional[Callable[[int], None]] = None
 
     async def fetch_users(self) -> Sequence[_threads.UserData]:
         """Fetch users the client is currently chatting with.
@@ -349,11 +352,19 @@ class Client:
             "tags": folders,
             "before": _util.datetime_to_millis(before) if before else None,
             "includeDeliveryReceipts": True,
-            "includeSeqID": False,
+            "includeSeqID": before is None,
         }
         (j,) = await self.session._graphql_requests(
             _graphql.from_doc_id("1349387578499440", params)
         )
+        if before is None and self.sequence_id_callback is not None:
+            try:
+                seq_id = int(j["viewer"]["message_threads"]["sync_sequence_id"])
+            except (KeyError, ValueError):
+                log.warning("Didn't get sequence ID from fetch_threads request")
+            else:
+                log.debug("Calling back with sequence ID from fetch_threads")
+                self.sequence_id_callback(seq_id)
 
         rtn = []
         for node in j["viewer"]["message_threads"]["nodes"]:

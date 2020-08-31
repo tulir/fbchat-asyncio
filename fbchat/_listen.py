@@ -101,24 +101,6 @@ def mqtt_factory() -> paho.mqtt.client.Client:
     return mqtt
 
 
-async def fetch_sequence_id(session: _session.Session) -> int:
-    """Fetch sequence ID."""
-    params = {
-        "limit": 0,
-        "tags": ["INBOX"],
-        "before": None,
-        "includeDeliveryReceipts": False,
-        "includeSeqID": True,
-    }
-    log.debug("Fetching MQTT sequence ID")
-    # Same doc id as in `Client.fetch_threads`
-    (j,) = await session._graphql_requests(_graphql.from_doc_id("1349387578499440", params))
-    sequence_id = j["viewer"]["message_threads"]["sync_sequence_id"]
-    if not sequence_id:
-        raise _exception.NotLoggedIn("Failed fetching sequence id")
-    return int(sequence_id)
-
-
 @attr.s(slots=True, kw_only=kw_only, eq=False, auto_attribs=True)
 class Listener:
     """Listen to incoming Facebook events.
@@ -142,6 +124,7 @@ class Listener:
     _disconnect_error: Optional[Exception] = None
     _sync_token: Optional[str] = None
     _sequence_id: Optional[int] = None
+    _sequence_id_wait: Optional[asyncio.Future] = None
     _tmp_events: List[_events.Event] = attr.ib(factory=list)
     _message_queue: asyncio.Queue = attr.ib(factory=lambda: asyncio.Queue(maxsize=64))
 
@@ -337,6 +320,14 @@ class Listener:
         ) as e:
             raise _exception.NotLoggedIn("MQTT reconnection failed") from e
 
+    def set_sequence_id(self, sequence_id: int) -> None:
+        if self._sequence_id_wait:
+            log.debug("Got expected set_sequence_id call, waking up listener")
+            self._sequence_id_wait.set_result(sequence_id)
+            self._sequence_id_wait = None
+        else:
+            log.debug("Got unexpected set_sequence_id call")
+
     async def listen(self) -> AsyncGenerator[_events.Event, Optional[bool]]:
         """Run the listening loop continually.
 
@@ -350,8 +341,10 @@ class Listener:
             ...     print(event)
         """
         if self._sequence_id is None:
-            self._sequence_id = await fetch_sequence_id(self.session)
-        # TODO add some limits for all the infinite while loops
+            fut = self._sequence_id_wait = self._loop.create_future()
+            log.debug("Waiting for sequence ID...")
+            self._sequence_id = await fut
+            log.debug("Got sequence ID: %d", self._sequence_id)
 
         await self._reconnect()
         yield _events.Connect()
@@ -369,9 +362,12 @@ class Listener:
 
             # The sequence ID was reset in _handle_ms
             if self._sequence_id is None:
-                self._sequence_id = await fetch_sequence_id(self.session)
+                fut = self._sequence_id_wait = self._loop.create_future()
                 self._messenger_queue_publish()
                 yield _events.Resync()
+                log.debug("Waiting for sequence ID after resync...")
+                self._sequence_id = await fut
+                log.debug("Got sequence ID: %d", self._sequence_id)
 
             # If disconnect() has been called
             # Beware, internal API, may have to change this to something more stable!
