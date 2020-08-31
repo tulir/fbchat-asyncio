@@ -538,7 +538,7 @@ class Client:
         data = {"voice_clip": voice_clip}
 
         j = await self.session._payload_post(
-            "https://upload.messenger.com/ajax/mercury/upload.php",
+            f"https://upload.{self.session.domain}/ajax/mercury/upload.php",
             data,
             files=file_dict,
         )

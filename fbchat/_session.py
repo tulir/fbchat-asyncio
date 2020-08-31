@@ -100,21 +100,15 @@ def base36encode(number: int) -> str:
     return sign + result
 
 
-def prefix_url(url: str) -> str:
-    if url.startswith("/"):
-        return "https://www.messenger.com" + url
-    return url
-
-
 def generate_message_id(now: datetime.datetime, client_id: str) -> str:
     k = _util.datetime_to_millis(now)
     l = int(random.random() * 4294967295)
     return "<{}:{}-{}@mail.projektitan.com>".format(k, l, client_id)
 
 
-def get_user_id(session: aiohttp.ClientSession) -> str:
+def get_user_id(domain: str, session: aiohttp.ClientSession) -> str:
     try:
-        rtn = session.cookie_jar.filter_cookies(URL("https://messenger.com")).get("c_user")
+        rtn = session.cookie_jar.filter_cookies(URL(f"https://{domain}")).get("c_user")
     except (AttributeError, KeyError):
         raise _exception.ParseError("Could not find user id", data=session.cookie_jar._cookies)
     if rtn is None:
@@ -122,7 +116,7 @@ def get_user_id(session: aiohttp.ClientSession) -> str:
     return rtn if isinstance(rtn, str) else str(rtn.value)
 
 
-def session_factory(user_agent: Optional[str] = None) -> aiohttp.ClientSession:
+def session_factory(domain: str, user_agent: Optional[str] = None) -> aiohttp.ClientSession:
     from . import __version__
     try:
         http_proxy = urllib.request.getproxies()["http"]
@@ -132,7 +126,7 @@ def session_factory(user_agent: Optional[str] = None) -> aiohttp.ClientSession:
                                             if ProxyConnector and http_proxy
                                             else None),
                                  headers={
-                                     "Referer": "https://www.messenger.com/",
+                                     "Referer": f"https://www.{domain}/",
                                      "User-Agent": user_agent or f"fbchat-asyncio/{__version__}",
                                  })
 
@@ -247,6 +241,12 @@ def get_fb_dtsg(define) -> Optional[str]:
     return None
 
 
+def prefix_url(domain: str, path: str) -> str:
+    if path.startswith("/"):
+        return f"https://www.{domain}" + path
+    return path
+
+
 @attr.s(slots=True, kw_only=kw_only, repr=False, eq=False, auto_attribs=True)
 class Session:
     """Stores and manages state required for most Facebook requests.
@@ -257,9 +257,13 @@ class Session:
     _user_id: str
     _fb_dtsg: str
     _revision: int
+    domain: str
     _session: aiohttp.ClientSession = attr.ib(factory=session_factory)
     _counter: int = 0
     _client_id: str = attr.ib(factory=client_id_factory)
+
+    def _prefix_url(self, path: str) -> str:
+        return prefix_url(self.domain, path)
 
     @property
     def user(self):
@@ -275,7 +279,7 @@ class Session:
         return "<fbchat.Session user_id={}>".format(self._user_id)
 
     def _get_params(self):
-        self._counter += 1  # TODO: Make this operation atomic / thread-safe
+        self._counter += 1
         return {
             "__a": 1,
             "__req": base36encode(self._counter),
@@ -283,7 +287,6 @@ class Session:
             "fb_dtsg": self._fb_dtsg,
         }
 
-    # TODO: Add ability to load previous cookies in here, to avoid 2fa flow
     @classmethod
     async def login(cls, email: str, password: str,
                     on_2fa_callback: Callable[[], Awaitable[int]] = None,
@@ -318,7 +321,7 @@ class Session:
             >>> session.user.id
             "1234"
         """
-        session = session_factory(user_agent=user_agent)
+        session = session_factory(domain="messenger.com", user_agent=user_agent)
 
         data = {
             # "jazoest": "2754",
@@ -386,7 +389,7 @@ class Session:
             raise _exception.NotLoggedIn("Failed logging in: {}, {}".format(url, error))
 
         try:
-            return await cls._from_session(session=session)
+            return await cls._from_session(session=session, domain="messenger.com")
         except _exception.NotLoggedIn as e:
             raise _exception.ParseError("Failed loading session", data=r) from e
 
@@ -401,12 +404,12 @@ class Session:
         """
         # Send a request to the login url, to see if we're directed to the home page
         try:
-            r = await self._session.get(prefix_url("/login/"), allow_redirects=False)
+            r = await self._session.get(self._prefix_url("/login/"), allow_redirects=False)
         except aiohttp.ClientError as e:
             _exception.handle_requests_error(e)
             raise Exception("handle_requests_error did not raise exception")
         _exception.handle_http_error(r.status)
-        return "https://www.messenger.com/" == r.headers.get("Location")
+        return f"https://www.{self.domain}/" == r.headers.get("Location")
 
     async def logout(self) -> None:
         """Safely log out the user.
@@ -416,10 +419,13 @@ class Session:
         Example:
             >>> session.logout()
         """
+        if self.domain != "messenger.com":
+            log.warning("session.logout() is only supported on messenger.com")
+            return
         data = {"fb_dtsg": self._fb_dtsg}
         try:
             r = await self._session.post(
-                prefix_url("/logout/"), data=data, allow_redirects=False
+                self._prefix_url("/logout/"), data=data, allow_redirects=False
             )
         except aiohttp.ClientError as e:
             _exception.handle_requests_error(e)
@@ -434,13 +440,13 @@ class Session:
             )
 
     @classmethod
-    async def _from_session(cls, session: aiohttp.ClientSession) -> Optional['Session']:
+    async def _from_session(cls, session: aiohttp.ClientSession, domain: str) -> Optional['Session']:
         # TODO: Automatically set user_id when the cookie changes in the session
-        user_id = get_user_id(session)
+        user_id = get_user_id(domain, session)
 
         # Make a request to the main page to retrieve ServerJSDefine entries
         try:
-            r = await session.get(prefix_url("/"), allow_redirects=False)
+            r = await session.get(prefix_url(domain, "/"), allow_redirects=False)
         except aiohttp.ClientError as e:
             _exception.handle_requests_error(e)
             raise Exception("handle_requests_error did not raise exception")
@@ -462,7 +468,8 @@ class Session:
         except TypeError:
             raise _exception.ParseError("Could not find client revision", data=define)
 
-        return cls(user_id=user_id, fb_dtsg=fb_dtsg, revision=revision, session=session)
+        return cls(user_id=user_id, fb_dtsg=fb_dtsg, revision=revision, session=session,
+                   domain=domain)
 
     def get_cookies(self) -> Optional[Mapping[str, str]]:
         """Retrieve session cookies, that can later be used in `from_cookies`.
@@ -473,12 +480,12 @@ class Session:
         Example:
             >>> cookies = session.get_cookies()
         """
-        cookie = self._session.cookie_jar.filter_cookies(URL("https://messenger.com"))
+        cookie = self._session.cookie_jar.filter_cookies(URL(f"https://{self.domain}"))
         return {key: morsel.value for key, morsel in cookie.items()}
 
     @classmethod
-    async def from_cookies(cls, cookies: Mapping[str, str], user_agent: Optional[str] = None
-                           ) -> 'Session':
+    async def from_cookies(cls, cookies: Mapping[str, str], user_agent: Optional[str] = None,
+                           domain: str = "messenger.com") -> 'Session':
         """Load a session from session cookies.
 
         Args:
@@ -489,7 +496,7 @@ class Session:
             >>> # Store cookies somewhere, and then subsequently
             >>> session = fbchat.Session.from_cookies(cookies)
         """
-        session = session_factory(user_agent=user_agent)
+        session = session_factory(domain=domain, user_agent=user_agent)
 
         if isinstance(cookies, BaseCookie):
             cookie = cookies
@@ -497,10 +504,10 @@ class Session:
             cookie = SimpleCookie()
             for key, value in cookies.items():
                 cookie[key] = value
-                cookie[key].update({"domain": "messenger.com", "path": "/"})
-        session.cookie_jar.update_cookies(cookie, URL("https://messenger.com"))
+                cookie[key].update({"domain": domain, "path": "/"})
+        session.cookie_jar.update_cookies(cookie, URL(f"https://{domain}"))
 
-        return await cls._from_session(session=session)
+        return await cls._from_session(session=session, domain=domain)
 
     async def _post(self, url, data, files=None, as_graphql=False):
         data.update(self._get_params())
@@ -512,7 +519,7 @@ class Session:
                 payload.add_field(key, file, filename=name, content_type=content_type)
             data = payload
         try:
-            r = await self._session.post(prefix_url(url), data=data)
+            r = await self._session.post(self._prefix_url(url), data=data)
         except aiohttp.ClientError as e:
             _exception.handle_requests_error(e)
             raise Exception("handle_requests_error did not raise exception")

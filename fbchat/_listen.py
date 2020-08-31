@@ -1,4 +1,3 @@
-import os
 import attr
 import random
 import paho.mqtt.client
@@ -6,7 +5,7 @@ import urllib.request
 import asyncio
 import aiohttp
 from ._common import log, kw_only
-from . import _util, _exception, _session, _graphql, _events
+from . import _util, _exception, _session, _events
 
 from typing import AsyncGenerator, Optional, List
 
@@ -16,8 +15,6 @@ try:
 except ImportError:
     socks = None
     URL = None
-
-HOST = "edge-chat.messenger.com"
 
 TOPICS = [
     # Things that happen in chats (e.g. messages)
@@ -60,7 +57,7 @@ TOPICS = [
 def get_cookie_header(session: aiohttp.ClientSession, url: str) -> str:
     """Extract a cookie header from a requests session."""
     # The cookies are extracted this way to make sure they're escaped correctly
-    return session.cookie_jar.filter_cookies(url).output(header="", sep=";").lstrip()
+    return session.cookie_jar.filter_cookies(URL(url)).output(header="", sep=";").lstrip()
 
 
 def generate_session_id() -> int:
@@ -68,7 +65,7 @@ def generate_session_id() -> int:
     return random.randint(1, 2 ** 53)
 
 
-def mqtt_factory() -> paho.mqtt.client.Client:
+def mqtt_factory(domain: str) -> paho.mqtt.client.Client:
     # Configure internal MQTT handler
     mqtt = paho.mqtt.client.Client(
         client_id="mqttwsclient",
@@ -97,7 +94,7 @@ def mqtt_factory() -> paho.mqtt.client.Client:
     # mqtt.message_retry_set(20)  # Retry sending for at least 20 seconds
     # mqtt.reconnect_delay_set(min_delay=1, max_delay=120)
     mqtt.tls_set()
-    mqtt.connect_async(HOST, 443, keepalive=10)
+    mqtt.connect_async(f"edge-chat.{domain}", 443, keepalive=10)
     return mqtt
 
 
@@ -120,7 +117,7 @@ class Listener:
     _chat_on: bool
     _foreground: bool
     _loop: asyncio.AbstractEventLoop = attr.ib(factory=asyncio.get_event_loop)
-    _mqtt: paho.mqtt.client.Client = attr.ib(factory=mqtt_factory)
+    _mqtt: paho.mqtt.client.Client = None
     _disconnect_error: Optional[Exception] = None
     _sync_token: Optional[str] = None
     _sequence_id: Optional[int] = None
@@ -129,7 +126,7 @@ class Listener:
     _message_queue: asyncio.Queue = attr.ib(factory=lambda: asyncio.Queue(maxsize=64))
 
     def __attrs_post_init__(self):
-        # Configure callbacks
+        self._mqtt = mqtt_factory(self.session.domain)
         self._mqtt.on_message = self._on_message_handler
         self._mqtt.on_connect = self._on_connect_handler
         self._mqtt.on_socket_open = self.on_socket_open
@@ -295,11 +292,11 @@ class Listener:
 
         headers = {
             "Cookie": get_cookie_header(
-                self.session._session, "https://edge-chat.messenger.com/chat"
+                self.session._session, f"https://edge-chat.{self.session.domain}/chat"
             ),
             "User-Agent": self.session._session._default_headers["User-Agent"],
-            "Origin": "https://www.messenger.com",
-            "Host": HOST,
+            "Origin": f"https://www.{self.session.domain}",
+            "Host": f"edge-chat.{self.session.domain}",
         }
 
         # TODO: Is region (lla | atn | odn | others?) important?
