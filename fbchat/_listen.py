@@ -9,12 +9,12 @@ from . import _util, _exception, _session, _events
 
 from typing import AsyncGenerator, Optional, List
 
+from yarl import URL
+
 try:
     import socks
-    from yarl import URL
 except ImportError:
     socks = None
-    URL = None
 
 TOPICS = [
     # Things that happen in chats (e.g. messages)
