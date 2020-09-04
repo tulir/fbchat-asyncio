@@ -47,7 +47,9 @@ def response_to_json(text):
             del rtn[-1]
             continue
         _exception.handle_payload_error(x)
-        [(key, value)] = x.items()
+        [(key, value), *rest] = x.items()
+        if len(rest) > 0:
+            log.warning("GraphQL payload has more than one entry: %s", x)
         _exception.handle_graphql_errors(value)
         if "response" in value:
             rtn[int(key[1:])] = value["response"]
