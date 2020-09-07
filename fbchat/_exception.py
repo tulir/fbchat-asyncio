@@ -113,17 +113,18 @@ class ServerRedirect(FacebookError):
     """Raised by Facebook if the client is suspicious and the user needs to verify the login."""
 
 
-def handle_payload_error(j):
-    try:
-        jsmods_require_raw = j["jsmods"]["require"]
-        # Import here to avoid cyclic imports
-        from ._util import get_jsmods_require
-        jsmods_require = get_jsmods_require(jsmods_require_raw)
-        url = jsmods_require["ServerRedirect.redirectPageTo"][0]
-        raise ServerRedirect(f"Got server redirect to {url}, "
-                             f"you may need to accept the session manually")
-    except (KeyError, IndexError):
-        pass
+def handle_payload_error(j, ignore_jsmod_redirect: bool = False):
+    if not ignore_jsmod_redirect:
+        try:
+            jsmods_require_raw = j["jsmods"]["require"]
+            # Import here to avoid cyclic imports
+            from ._util import get_jsmods_require
+            jsmods_require = get_jsmods_require(jsmods_require_raw)
+            url = jsmods_require["ServerRedirect.redirectPageTo"][0]
+            raise ServerRedirect(f"Got server redirect to {url}, "
+                                 f"you may need to accept the session manually")
+        except (KeyError, IndexError):
+            pass
     if "error" not in j:
         return
     code = j["error"]

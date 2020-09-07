@@ -486,7 +486,7 @@ class Client:
         image_id = str(image_id)
         data = {"photo_id": str(image_id)}
         j = await self.session._post("/mercury/attachments/photo/", data)
-        _exception.handle_payload_error(j)
+        _exception.handle_payload_error(j, ignore_jsmod_redirect=True)
 
         if "jsmods" not in j:
             raise _exception.ParseError("No jsmods when fetching image URL", data=j)
