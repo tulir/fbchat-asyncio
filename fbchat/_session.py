@@ -457,7 +457,11 @@ class Session:
             _exception.handle_requests_error(e)
             raise Exception("handle_requests_error did not raise exception")
         _exception.handle_http_error(r.status)
-        return f"https://www.{self.domain}/" == r.headers.get("Location")
+        location = r.headers.get("Location")
+        return location in (f"https://www.{self.domain}/",
+                            # We include this as a "logged in" status, since the user is logged in,
+                            # but needs to verify the session elsewhere
+                            f"https://www.{self.domain}/checkpoint/block/")
 
     async def logout(self) -> None:
         """Safely log out the user.
