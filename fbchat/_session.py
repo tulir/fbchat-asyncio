@@ -22,10 +22,14 @@ from . import _graphql, _util, _exception
 from typing import Optional, Mapping, Callable, Any, Awaitable, Dict, List, NamedTuple
 
 try:
-    from aiohttp_socks import ProxyType, ProxyConnector
+    from aiohttp_socks import ProxyType, ProxyConnector, ProxyTimeoutError
 except ImportError:
     ProxyType = None
     ProxyConnector = None
+
+
+    class ProxyTimeoutError(Exception):
+        pass
 
 SERVER_JS_DEFINE_REGEX = re.compile(r'(?:'
                                     r'\(new ServerJS\(\)\)(?:;s)?'
@@ -591,11 +595,19 @@ class Session:
             kwargs["headers"] = {"Host": real_url.host}
             kwargs["cookies"] = self._session.cookie_jar.filter_cookies(real_url)
             real_url = real_url.with_host(real_url.host.replace(self.domain, self._onion))
-        try:
-            r = await self._session.post(real_url, data=data, **kwargs)
-        except aiohttp.ClientError as e:
-            _exception.handle_requests_error(e)
-            raise Exception("handle_requests_error did not raise exception")
+        attempt = 1
+        while True:
+            try:
+                r = await self._session.post(real_url, data=data, **kwargs)
+                break
+            except aiohttp.ClientError as e:
+                _exception.handle_requests_error(e)
+                raise Exception("handle_requests_error did not raise exception")
+            except ProxyTimeoutError:
+                if attempt >= 3:
+                    raise
+                log.warning("Got ProxyTimeoutError, retrying...")
+                attempt += 1
         _exception.handle_http_error(r.status)
         text = await r.text()
         if text is None or len(text) == 0:
