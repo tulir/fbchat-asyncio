@@ -169,13 +169,17 @@ def get_user_id(domain: str, session: aiohttp.ClientSession) -> str:
 
 def session_factory(domain: str, user_agent: Optional[str] = None) -> aiohttp.ClientSession:
     from . import __version__
+    connector = None
     try:
         http_proxy = urllib.request.getproxies()["http"]
     except KeyError:
-        http_proxy = None
-    return aiohttp.ClientSession(connector=(ProxyConnector.from_url(http_proxy)
-                                            if ProxyConnector and http_proxy
-                                            else None),
+        pass
+    else:
+        if ProxyConnector:
+            connector = ProxyConnector.from_url(http_proxy)
+        else:
+            log.warning("http_proxy is set, but aiohttp-socks is not installed")
+    return aiohttp.ClientSession(connector=connector,
                                  headers={
                                      "Referer": f"https://www.{domain}/",
                                      "User-Agent": user_agent or f"fbchat-asyncio/{__version__}",
