@@ -16,7 +16,7 @@ from http.cookies import SimpleCookie, BaseCookie
 # Or maybe just replace usage with `html.parser`?
 import bs4
 
-from ._common import log, kw_only
+from ._common import log, req_log, kw_only
 from . import _graphql, _util, _exception
 
 from typing import Optional, Mapping, Callable, Any, Awaitable, Dict, List, NamedTuple
@@ -625,6 +625,10 @@ class Session:
             return j
 
     async def _payload_post(self, url, data, files=None):
+        if files:
+            req_log.debug("POST %s %s with %d files", url, data, len(files))
+        else:
+            req_log.debug("POST %s %s", url, data)
         j = await self._post(url, data, files=files)
         _exception.handle_payload_error(j)
 
@@ -648,6 +652,7 @@ class Session:
             "response_format": "json",
             "queries": _graphql.queries_to_json(*queries),
         }
+        req_log.debug("Making GraphQL queries: %s", queries)
         return await self._post("/api/graphqlbatch/", data, as_graphql=True)
 
     async def _do_send_request(self, data):
@@ -661,6 +666,8 @@ class Session:
         data["message_id"] = offline_threading_id
         data["threading_id"] = generate_message_id(now, self._client_id)
         data["ephemeral_ttl_mode:"] = "0"
+        req_log.debug("POST /messaging/send/ <data redacted>")
+        req_log.log(5, "Message data: %s", data)
         j = await self._post("/messaging/send/", data)
 
         _exception.handle_payload_error(j)

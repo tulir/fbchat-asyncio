@@ -3,6 +3,7 @@ import attr
 import logging
 
 log = logging.getLogger("fbchat")
+req_log = logging.getLogger("fbchat.request")
 
 # Enable kw_only if the python version supports it
 kw_only = sys.version_info[:2] > (3, 5)

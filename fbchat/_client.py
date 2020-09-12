@@ -3,7 +3,7 @@ import datetime
 
 import attr
 
-from ._common import log, kw_only
+from ._common import log, req_log, kw_only
 from . import _exception, _util, _graphql, _session, _threads, _models
 
 from typing import Sequence, Iterable, Tuple, Optional, Set, BinaryIO, AsyncIterator
@@ -485,6 +485,7 @@ class Client:
         """
         image_id = str(image_id)
         data = {"photo_id": str(image_id)}
+        req_log.debug("POST /mercury/attachments/photo/?photo_id=%s", image_id)
         j = await self.session._post("/mercury/attachments/photo/", data)
         _exception.handle_payload_error(j, ignore_jsmod_redirect=True)
 
