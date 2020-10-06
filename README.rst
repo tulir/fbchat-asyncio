@@ -6,7 +6,7 @@
     :alt: Project version
 
 .. image:: https://badgen.net/badge/python/3.6,3.7,3.8?list=|
-    :target: https://pypi.python.org/pypi/fbchat
+    :target: https://pypi.python.org/pypi/fbchat-asyncio
     :alt: Supported python versions: 3.6, 3.7 and 3.8
 
 .. image:: https://badgen.net/pypi/license/fbchat
@@ -32,13 +32,6 @@ This is *not* an official API, Facebook has that `over here <https://developers.
 Essentially, everything you need to make an amazing Facebook bot!
 
 
-Version Warning
----------------
-``v2`` is currently being developed at the ``master`` branch and it's highly unstable. If you want to view the old ``v1``, go `here <https://github.com/carpedm20/fbchat/tree/v1>`__.
-
-Additionally, you can view the project's progress `here <https://github.com/carpedm20/fbchat/projects/2>`__.
-
-
 Caveats
 -------
 
@@ -62,7 +55,7 @@ Installation
 
 .. code-block::
 
-    $ pip install fbchat
+    $ pip install fbchat-asyncio
 
 If you don't have `pip <https://pip.pypa.io/>`_, `this guide <http://docs.python-guide.org/en/latest/starting/installation/>`_ can guide you through the process.
 
@@ -70,7 +63,7 @@ You can also install directly from source, provided you have ``pip>=19.0``:
 
 .. code-block::
 
-    $ pip install git+https://github.com/carpedm20/fbchat.git
+    $ pip install git+https://github.com/tulir/fbchat-asyncio.git#egg=fbchat
 
 .. inclusion-marker-installation-end
 
@@ -92,7 +85,7 @@ More examples are available `here <https://github.com/carpedm20/fbchat/tree/mast
 Maintainer
 ----------
 
-- Mads Marquart / `@madsmtm <https://github.com/madsmtm>`__
+- Tulir Asokan / `@tulir <https://github.com/tulir>`__
 
 
 Acknowledgements
