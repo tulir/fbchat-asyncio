@@ -73,11 +73,6 @@ class Mention:
         }
 
 
-# Exaustively searched for options by using the list in:
-# https://unicode.org/emoji/charts/full-emoji-list.html
-SENDABLE_REACTIONS = ("❤", "😍", "😆", "😮", "😢", "😠", "👍", "👎")
-
-
 @attrs_default
 class Message:
     """Represents a Facebook message.
@@ -128,20 +123,12 @@ class Message:
     async def react(self, reaction: Optional[str]):
         """React to the message, or removes reaction.
 
-        Currently, you can use "❤", "😍", "😆", "😮", "😢", "😠", "👍" or "👎". It
-        should be possible to add support for more, but we haven't figured that out yet.
-
         Args:
             reaction: Reaction emoji to use, or if ``None``, removes reaction.
 
         Example:
             >>> message.react("😍")
         """
-        if reaction and reaction not in SENDABLE_REACTIONS:
-            raise ValueError(
-                "Invalid reaction! Please use one of: {}".format(SENDABLE_REACTIONS)
-            )
-
         data = {
             "action": "ADD_REACTION" if reaction else "REMOVE_REACTION",
             "client_mutation_id": "1",
