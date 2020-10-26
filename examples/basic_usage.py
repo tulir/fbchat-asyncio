@@ -1,12 +1,18 @@
+import asyncio
 import fbchat
 
-# Log the user in
-session = fbchat.Session.login("<email>", "<password>")
 
-print("Own id: {}".format(session.user.id))
+async def main():
+    # Log the user in
+    session = await fbchat.Session.login("<email>", "<password>")
 
-# Send a message to yourself
-session.user.send_text("Hi me!")
+    print("Own id: {}".format(session.user.id))
 
-# Log the user out
-session.logout()
+    # Send a message to yourself
+    await session.user.send_text("Hi me!")
+
+    # Log the user out
+    await session.logout()
+
+
+asyncio.run(main())
