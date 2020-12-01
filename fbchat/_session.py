@@ -507,7 +507,7 @@ class Session:
 
         # Make a request to the main page to retrieve ServerJSDefine entries
         try:
-            r = await session.get(prefix_url(domain, "/"), allow_redirects=False, headers={
+            r = await session.get(prefix_url(domain, "/"), allow_redirects=True, headers={
                 "Accept": "text/html",
             })
         except aiohttp.ClientError as e:
