@@ -68,19 +68,44 @@ You can also install directly from source, provided you have ``pip>=19.0``:
 .. inclusion-marker-installation-end
 
 
-Example Usage
--------------
+Examples
+--------
 
-.. code-block::
+All examples are available `here <https://github.com/tulir/fbchat-asyncio/tree/master/examples>`__.
 
-    import getpass
-    import fbchat
-    session = fbchat.Session.login("<email/phone number>", getpass.getpass())
-    user = fbchat.User(session=session, id=session.user_id)
-    user.send_text("Test message!")
+Basic example: `basic_usage.py <https://github.com/tulir/fbchat-asyncio/blob/master/examples/basic_usage.py>`__
 
-More examples are available `here <https://github.com/carpedm20/fbchat/tree/master/examples>`__.
+If login using email and password doesn't work, you can create a file in the working directory called "session.json" with the following format:
 
+.. code-block:: json
+
+	{
+		"c_user": "[15 digits]",
+		"xs": "[variable]"
+	}
+
+These values are from the cookies stored by your browser after logging in your account. You can get these values this way:
+
+On Firefox:
+
+1. Open `messenger.com <https://messenger.com>`__, login and press F12
+2. Go to "Storage"
+3. Go to "Cookies"
+4. Select "https://messenger.com" and copy the values from there.
+
+On Chrome:
+
+The process is the same, the only difference is "Storage" is called "Application" in Chrome.
+
+**KEEP IN MIND: These values can be used by someone else to login to your account, so keep them private!**
+
+After that you can use this code: `session_handling.py <https://github.com/tulir/fbchat-asyncio/blob/master/examples/session_handling.py>`__
+
+Depending on the domain you're logging into, you have to set the "domain" argument appropriately (either `facebook.com` or `messenger.com`). Here's an example:
+
+.. code-block:: python
+
+	await fbchat.Session.from_cookies(cookies, domain="messenger.com")
 
 Maintainer
 ----------
